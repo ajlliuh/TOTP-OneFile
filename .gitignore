@@ -1,0 +1,13 @@
+# Windows 系统文件
+Thumbs.db
+Desktop.ini
+
+# macOS 系统文件
+.DS_Store
+
+# VSCode 编辑器配置
+.vscode/
+
+# 其他常见临时文件
+*.log
+*.tmp 
