@@ -564,6 +564,8 @@
                 <button class="menu-btn" id="m-batch-scan"><i class="bi bi-qr-code-scan"></i> 批量扫码导入</button>
                 <button class="menu-btn" id="m-gist-backup"><i class="bi bi-cloud-upload"></i> Gist 备份</button>
                 <button class="menu-btn" id="m-gist-restore"><i class="bi bi-cloud-download"></i> Gist 恢复</button>
+                <button class="menu-btn" id="m-webdav-backup"><i class="bi bi-cloud-upload"></i> WebDAV 备份</button>
+                <button class="menu-btn" id="m-webdav-restore"><i class="bi bi-cloud-download"></i> WebDAV 恢复</button>
                 <button class="menu-btn" id="m-close"><i class="bi bi-x"></i> 关闭</button>
             `;
             if (!menuModal) {
@@ -596,6 +598,8 @@
             menuModal.querySelector('#m-batch-scan').onclick = () => { menuModal.classList.remove('show'); document.getElementById('batch-scan-btn').click(); };
             menuModal.querySelector('#m-gist-backup').onclick = () => { menuModal.classList.remove('show'); backupToGist(); };
             menuModal.querySelector('#m-gist-restore').onclick = () => { menuModal.classList.remove('show'); restoreFromGist(); };
+            menuModal.querySelector('#m-webdav-backup').onclick = () => { menuModal.classList.remove('show'); backupToWebDAV(); };
+            menuModal.querySelector('#m-webdav-restore').onclick = () => { menuModal.classList.remove('show'); restoreFromWebDAV(); };
           }
         } catch (e) { /* 菜单按钮异常不影响主流程 */ }
       }
@@ -625,6 +629,8 @@
         <button class="btn btn-outline-success btn-sm" id="batch-scan-btn"><i class="bi bi-qr-code-scan"></i><span> 批量扫码导入</span></button>
         <button class="btn btn-outline-dark btn-sm" id="gist-backup-btn"><i class="bi bi-cloud-upload"></i><span> Gist 备份</span></button>
         <button class="btn btn-outline-dark btn-sm" id="gist-restore-btn"><i class="bi bi-cloud-download"></i><span> Gist 恢复</span></button>
+        <button class="btn btn-outline-dark btn-sm" id="webdav-backup-btn"><i class="bi bi-cloud-upload"></i><span> WebDAV 备份</span></button>
+        <button class="btn btn-outline-dark btn-sm" id="webdav-restore-btn"><i class="bi bi-cloud-download"></i><span> WebDAV 恢复</span></button>
       `;
       app.appendChild(batchToolbar);
 
@@ -758,6 +764,10 @@
           backupToGist();
         } else if (btn.id === 'gist-restore-btn') {
           restoreFromGist();
+        } else if (btn.id === 'webdav-backup-btn') {
+          backupToWebDAV();
+        } else if (btn.id === 'webdav-restore-btn') {
+          restoreFromWebDAV();
         }
       });
       // 复选框事件
@@ -1317,6 +1327,65 @@
         alert('Gist 恢复成功！');
       } catch (e) {
         alert('Gist 恢复失败：' + e.message);
+      }
+    }
+
+    // ========== WebDAV 备份/恢复 ==========
+    function getWebDAVConfig() {
+      let url = localStorage.getItem('webdav_url') || '';
+      let username = localStorage.getItem('webdav_username') || '';
+      let password = localStorage.getItem('webdav_password') || '';
+      let filename = localStorage.getItem('webdav_filename') || 'totp_tokens.json';
+      if (!url) url = prompt('请输入 WebDAV 服务器地址（如 https://dav.jianguoyun.com/dav/ ）');
+      if (!username) username = prompt('请输入 WebDAV 用户名');
+      if (!password) password = prompt('请输入 WebDAV 密码');
+      if (!filename) filename = prompt('请输入备份文件名', 'totp_tokens.json');
+      if (url && username && password && filename) {
+        localStorage.setItem('webdav_url', url);
+        localStorage.setItem('webdav_username', username);
+        localStorage.setItem('webdav_password', password);
+        localStorage.setItem('webdav_filename', filename);
+        return { url, username, password, filename };
+      }
+      alert('WebDAV 配置不完整');
+      return null;
+    }
+    async function backupToWebDAV() {
+      const config = getWebDAVConfig();
+      if (!config) return;
+      try {
+        const res = await fetch(config.url + config.filename, {
+          method: 'PUT',
+          headers: {
+            'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(tokens, null, 2)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        alert('WebDAV 备份成功！');
+      } catch (e) {
+        alert('WebDAV 备份失败：' + e.message);
+      }
+    }
+    async function restoreFromWebDAV() {
+      const config = getWebDAVConfig();
+      if (!config) return;
+      try {
+        const res = await fetch(config.url + config.filename, {
+          headers: {
+            'Authorization': 'Basic ' + btoa(config.username + ':' + config.password)
+          }
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const arr = await res.json();
+        if (!Array.isArray(arr)) throw new Error('WebDAV 文件内容格式错误');
+        tokens = arr;
+        saveTokens(tokens);
+        render();
+        alert('WebDAV 恢复成功！');
+      } catch (e) {
+        alert('WebDAV 恢复失败：' + e.message);
       }
     }
     </script>
