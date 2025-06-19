@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOTP 令牌管理器</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            /* 不设置height/overflow，保证页面整体滚动 */
+            /* overflow-x: hidden;  // 恢复前的状态，注释掉 */
+        }
+        body { background: #f8f9fa; }
+        .token-card { width: 100%; position: relative; overflow: visible; margin-bottom: 1rem; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: none; }
+        .token-code { font-size: 1.7rem; font-weight: bold; font-family: monospace; letter-spacing: 2px; }
+        .progress { height: 5px; border-radius: 3px; background: #e9ecef; }
+        .progress-bar { background: linear-gradient(90deg, #4f8cff 0%, #6ed6ff 100%); transition: width 0.3s; }
+        .search-box { margin-bottom: 1rem; }
+        .qr-scanner { max-width: 300px; margin: 0 auto; }
+        .token-actions { margin-top: 0.5rem; }
+        .token-actions button { margin-right: 0.5rem; min-width: 80px; }
+        .token-actions .btn { border-radius: 1.5rem; }
+        .modal-dialog { max-width: 500px; }
+        .token-info { font-size: 1rem; color: #555; font-weight: 500; }
+        .token-valid { color: #198754; }
+        .token-invalid { color: #dc3545; }
+        .error-message { color: #dc3545; font-size: 0.95rem; margin-top: 0.5rem; }
+        .backup-list { max-height: 300px; overflow-y: auto; }
+        .token-list-empty { color: #aaa; text-align: center; margin: 2rem 0; font-size: 1.1rem; }
+        .token-editable { background: #fffbe6; }
+        .token-editable input { font-size: 1rem; }
+        .token-editable .btn { margin-left: 0.5rem; }
+        .token-card .form-control { font-size: 1rem; border-radius: 0.5rem; }
+        .token-card .btn { font-size: 1rem; border-radius: 1.5rem; }
+        .token-card .form-label { font-size: 1rem; color: #888; }
+        .token-card .form-text { font-size: 0.9rem; color: #aaa; }
+        .token-card .badge { font-size: 0.9rem; }
+        .token-card .input-group-text { font-size: 1rem; }
+        .token-card .input-group { margin-bottom: 0.5rem; }
+        .token-card .form-check-label { font-size: 1rem; }
+        .token-card .form-check-input { margin-top: 0.2rem; }
+        .token-card .form-switch { margin-bottom: 0.5rem; }
+        .token-card .form-switch .form-check-input { width: 2.5em; height: 1.2em; }
+        .token-card .form-switch .form-check-label { margin-left: 0.5em; }
+        .token-card .form-switch .form-check-input:checked { background-color: #198754; border-color: #198754; }
+        .token-card .form-switch .form-check-input:focus { box-shadow: none; }
+        .token-card .form-switch .form-check-input:active { background-color: #198754; border-color: #198754; }
+        .token-card .form-switch .form-check-input:checked:after { background-color: #fff; }
+        .token-card .form-switch .form-check-input:after { background-color: #fff; }
+        .token-card .form-switch .form-check-input:checked:before { background-color: #fff; }
+        .token-card .form-switch .form-check-input:before { background-color: #fff; }
+        .token-card .form-switch .form-check-input:checked:after { background-color: #fff; }
+        .token-card .form-switch .form-check-input:after { background-color: #fff; }
+        .token-card .form-switch .form-check-input:checked:before { background-color: #fff; }
+        .token-card .form-switch .form-check-input:before { background-color: #fff; }
+        /* 工具栏美化 */
+        .mb-3.d-flex.flex-wrap.gap-2.justify-content-between.align-items-center {
+          background: #fff; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.03); padding: 1rem 1.2rem; margin-bottom: 1.5rem !important;
+        }
+        .btn { transition: box-shadow 0.2s, background 0.2s; }
+        .btn:active, .btn:focus { box-shadow: 0 0 0 0.15rem #4f8cff33; }
+        .btn-outline-primary:hover, .btn-outline-info:hover { background: #e6f0ff; }
+        .btn-outline-danger:hover { background: #ffeaea; }
+        .btn[disabled] { opacity: 0.6; pointer-events: none; }
+        /* 响应式适配 */
+        @media (min-width: 601px) {
+          .token-card .card-body {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            padding: 0.7rem 1.2rem;
+            gap: 1.2rem;
+            min-height: 56px;
+          }
+          .token-info {
+            font-size: 1.1rem;
+            margin-bottom: 0 !important;
+            white-space: normal;
+            word-break: break-all;
+            flex: 1 1 0%;
+            min-width: 0;
+          }
+          .token-code {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            cursor: pointer;
+            margin: 0 1.2rem 0 0.5rem;
+            flex-shrink: 0;
+          }
+          .token-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+          }
+          .token-actions .btn {
+            min-width: 60px;
+            padding: 0.2rem 0.7rem;
+            font-size: 1.1rem;
+          }
+          .progress {
+            height: 6px;
+            max-width: 80px;
+            margin: 0 0.5rem;
+            flex-shrink: 0;
+          }
+          .token-timer {
+            color: #888;
+            font-size: 1rem;
+            min-width: 36px;
+            display: inline-block;
+            margin-right: 1.2rem;
+            flex-shrink: 0;
+          }
+          .batch-toolbar {
+            display: flex !important;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 0.5rem;
+          }
+          .batch-toolbar .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3em;
+            font-size: 1.05rem;
+            min-width: 90px;
+          }
+          .search-box-sticky, .search-box {
+            max-width: 480px;
+            margin: 0 auto 1.5rem auto !important;
+            border-radius: 1.2rem;
+            box-shadow: 0 2px 8px #0001;
+            background: #fff;
+            padding: 0.7rem 1.2rem;
+            display: flex;
+            align-items: center;
+          }
+          .search-box .form-control {
+            border-radius: 1.2rem;
+            font-size: 1.1rem;
+            box-shadow: none;
+            border: none;
+            background: transparent;
+          }
+          .mobile-menu-btn { display: none !important; }
+        }
+        @media (max-width: 600px) {
+          .token-card {
+            border-radius: 1.2rem;
+            box-shadow: 0 2px 8px #0001;
+            margin-bottom: 0.7rem;
+            overflow: hidden;
+            background: #fff;
+            position: relative;
+            transition: box-shadow 0.2s;
+          }
+          .swipe-actions {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+          }
+          .token-card.swipe-show-left .swipe-actions,
+          .token-card.swipe-show-right .swipe-actions {
+            opacity: 1;
+            pointer-events: auto;
+          }
+          .swipe-actions .swipe-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 38px;
+            height: 38px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #fff;
+            border: none;
+            outline: none;
+            pointer-events: auto;
+            transition: background 0.2s;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px #0002;
+            z-index: 2;
+          }
+          .token-card.swipe-show-left .swipe-btn.delete {
+            display: flex;
+            right: 8px;
+            background: #d9534f;
+          }
+          .token-card.swipe-show-right .swipe-btn.edit {
+            display: flex;
+            left: 8px;
+            background: #0d6efd;
+          }
+          .token-card.swipe-show-right .swipe-btn.qr {
+            display: flex;
+            left: 54px;
+            background: #198754;
+          }
+          .token-card .card-body {
+            position: relative;
+            z-index: 1;
+            background: transparent;
+            border-radius: 1.2rem;
+            transition: transform 0.2s;
+            will-change: transform;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 0.2rem;
+            padding: 0.6rem 0.7rem 0.5rem 0.7rem;
+            min-height: 48px;
+          }
+          .token-info-row {
+            width: 100%;
+            font-size: 1.05rem;
+            color: #222;
+            margin-bottom: 0.1rem;
+            white-space: normal;
+            word-break: break-all;
+            line-height: 1.2;
+            text-align: left;
+          }
+          .token-code-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 0.5rem;
+            margin-top: 0.1rem;
+          }
+          .token-code {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            cursor: pointer;
+            color: #222;
+            flex-shrink: 0;
+          }
+          .token-timer { display: none !important; }
+          .progress { display: none !important; }
+          .totp-pie {
+            width: 28px;
+            height: 28px;
+            display: inline-block;
+            margin-left: auto;
+            flex-shrink: 0;
+            background: none;
+          }
+          .batch-toolbar { display: none !important; }
+          .search-box-sticky, .search-box {
+            margin-bottom: 1rem !important;
+            border-radius: 1.2rem;
+            box-shadow: 0 2px 8px #0001;
+            background: #fff;
+            padding: 0.2rem 0.5rem 0.2rem 0.7rem;
+            display: flex;
+            align-items: center;
+          }
+          .search-box .form-control {
+            border-radius: 1.2rem 0 0 1.2rem;
+            font-size: 1.1rem;
+            box-shadow: none;
+            border: none;
+            background: transparent;
+            height: 2.4rem;
+          }
+          .mobile-menu-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 2.4rem;
+            width: 2.4rem;
+            margin-left: 0.2rem;
+            border: none;
+            background: none;
+            border-radius: 0 1.2rem 1.2rem 0;
+            font-size: 1.5rem;
+            color: #333;
+            box-shadow: none;
+            transition: background 0.2s;
+          }
+          .mobile-menu-btn:active { background: #eee; }
+          .mobile-menu-modal {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            background: #fff;
+            box-shadow: 0 -2px 16px #0002;
+            border-radius: 1.2rem 1.2rem 0 0;
+            z-index: 9999;
+            padding: 1.2rem 1.2rem 1.2rem 1.2rem;
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+            animation: slideUp 0.25s;
+          }
+          .mobile-menu-modal.show { display: flex; }
+          .mobile-menu-modal .menu-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 0.7rem;
+            color: #222;
+          }
+          .mobile-menu-modal .menu-btn {
+            width: 100%;
+            font-size: 1.1rem;
+            padding: 0.7em 0;
+            border-radius: 0.7em;
+            border: none;
+            background: #f5f5f5;
+            color: #222;
+            margin-bottom: 0.2em;
+            display: flex;
+            align-items: center;
+            gap: 0.7em;
+            justify-content: flex-start;
+            transition: background 0.2s;
+          }
+          .mobile-menu-modal .menu-btn:active { background: #e0e0e0; }
+          @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+        }
+        .container {
+            position: relative;
+            width: 90vw;
+            max-width: 1200px;
+            min-width: 320px;
+            margin: 2.5rem auto;
+            box-sizing: border-box;
+        }
+        .search-box-sticky {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            width: 90vw;
+            max-width: 1200px;
+            min-width: 320px;
+            margin: 0 auto;
+            background: #f8f9fa;
+            box-shadow: 0 4px 16px #0002;
+            border-radius: 1.2rem;
+            padding: 0.7rem 1.2rem;
+            display: flex;
+            align-items: center;
+        }
+        @media (max-width: 1200px) {
+          .container, .search-box-sticky {
+            max-width: 96vw;
+            width: 96vw;
+            min-width: 0;
+          }
+        }
+        @media (max-width: 600px) {
+          .container, .search-box-sticky {
+            max-width: 100vw;
+            width: 100vw;
+            min-width: 0;
+            border-radius: 0;
+            padding-left: 0;
+            padding-right: 0;
+          }
+        }
+        /* 搜索框整体美化 */
+        .search-box-sticky, .search-box {
+          background: #fff;
+          border-radius: 1.5rem;
+          box-shadow: 0 2px 8px #0001;
+          display: flex;
+          align-items: center;
+          padding: 0.2rem 0.7rem;
+          border: 1px solid #e3e6ea;
+          max-width: 480px;
+          margin: 0 auto 1.5rem auto !important;
+        }
+        /* 去除 input-group 默认分隔线和背景 */
+        .search-box .input-group-text {
+          background: transparent;
+          border: none;
+          padding: 0 0.5rem 0 0;
+          color: #b0b8c1;
+          font-size: 1.2rem;
+          display: flex;
+          align-items: center;
+        }
+        /* 输入框无边框，圆角与整体一致 */
+        .search-box .form-control {
+          border: none;
+          box-shadow: none;
+          background: transparent;
+          border-radius: 1.5rem;
+          font-size: 1.1rem;
+          padding-left: 0.3rem;
+          padding-right: 0.3rem;
+          height: 2.2rem;
+        }
+        /* 输入框聚焦时无边框高亮 */
+        .search-box .form-control:focus {
+          box-shadow: none;
+          border: none;
+        }
+        @media (max-width: 600px) {
+          .search-box-sticky, .search-box {
+            border-radius: 0;
+            max-width: 100vw;
+            width: 100vw;
+            padding: 0.1rem 0.5rem;
+          }
+          .search-box .form-control {
+            font-size: 1rem;
+            height: 2rem;
+          }
+        }
+    </style>
+    <!-- 必要依赖 -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <!-- <script src="https://unpkg.com/base32.js@1.0.0/base32.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/kjua@0.1.1/dist/kjua.min.js"></script>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">TOTP 令牌管理器</h1>
+        <div id="mainApp"></div>
+    </div>
+    <script>
+    // ========== 内嵌 Base32 解码 ==========
+    function base32ToBytes(base32) {
+      // RFC4648 Base32 字母表
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      let clean = base32.replace(/\s+/g, '').toUpperCase().replace(/=+$/, '');
+      let bits = '';
+      for (let i = 0; i < clean.length; i++) {
+        const val = alphabet.indexOf(clean[i]);
+        if (val === -1) return null;
+        bits += val.toString(2).padStart(5, '0');
+      }
+      const bytes = [];
+      for (let i = 0; i + 8 <= bits.length; i += 8) {
+        bytes.push(parseInt(bits.slice(i, i + 8), 2));
+      }
+      return new Uint8Array(bytes);
+    }
+
+    // ========== 配置 ==========
+    // 已移除 GitHub 相关配置
+
+    // ========== OAuth PKCE 工具 ==========
+    // 已移除 GitHub OAuth 相关函数
+
+    // ========== 工具函数 ==========
+    function uuidv4() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    function leftPad(str, len, pad) {
+      str = String(str);
+      while (str.length < len) str = pad + str;
+      return str;
+    }
+    function getTimeStep() {
+      return Math.floor(Date.now() / 1000 / 30);
+    }
+    function u8ToWordArray(u8arr) {
+      var words = [], i = 0, len = u8arr.length;
+      for (; i < len; i += 4) {
+        words.push(
+          ((u8arr[i]     << 24) | 
+           (u8arr[i + 1] << 16) | 
+           (u8arr[i + 2] << 8)  | 
+           (u8arr[i + 3] || 0)) >>> 0
+        );
+      }
+      return CryptoJS.lib.WordArray.create(words, len);
+    }
+    function hotp(secretBytes, counter) {
+      const key = u8ToWordArray(secretBytes);
+      const counterBytes = new Uint8Array(8);
+      for (let i = 7; i >= 0; --i) {
+        counterBytes[i] = counter & 0xff;
+        counter = counter >> 8;
+      }
+      const counterWord = CryptoJS.lib.WordArray.create(counterBytes);
+      const hmac = CryptoJS.HmacSHA1(counterWord, key);
+      const hmacBytes = CryptoJS.enc.Hex.parse(hmac.toString());
+      const offset = hmacBytes.words[4] & 0xf;
+      const binCode = ((hmacBytes.words[Math.floor(offset / 4)] << ((offset % 4) * 8)) >>> 0) & 0xffffffff;
+      const code = (binCode & 0x7fffffff) % 1000000;
+      return leftPad(code, 6, '0');
+    }
+    function totp(secret) {
+      const bytes = base32ToBytes(secret);
+      if (!bytes) return '无效密钥';
+      return hotp(bytes, getTimeStep());
+    }
+
+    // ========== 本地存储 ==========
+    const STORAGE_KEY = 'totp_tokens_v2';
+    function loadTokens() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      } catch {
+        return [];
+      }
+    }
+    function saveTokens(tokens) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
+    }
+
+    // ========== UI 渲染 ==========
+    const app = document.getElementById('mainApp');
+    let tokens = loadTokens();
+    let timer = null;
+    let selectedIds = new Set();
+    let searchKeyword = '';
+
+    function render() {
+      // 搜索框只插入一次
+      let searchBox = document.querySelector('.search-box-sticky');
+      if (!searchBox) {
+        searchBox = document.createElement('div');
+        searchBox.className = 'input-group mb-3 search-box search-box-sticky';
+        searchBox.innerHTML = `
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control" id="searchInput" placeholder="搜索令牌（支持名称、密钥等）" value="${searchKeyword}">
+        `;
+        // 若body第一个元素不是search-box-sticky，则插入到body最前面
+        if (!document.body.firstElementChild || !document.body.firstElementChild.classList.contains('search-box-sticky')) {
+          document.body.insertBefore(searchBox, document.body.firstChild);
+        }
+      } else {
+        searchBox.querySelector('#searchInput').value = searchKeyword;
+      }
+      // 移动端插入菜单按钮
+      if (window.innerWidth <= 600) {
+        try {
+          if (!searchBox.querySelector('.mobile-menu-btn')) {
+            const menuBtn = document.createElement('button');
+            menuBtn.className = 'mobile-menu-btn';
+            menuBtn.type = 'button';
+            menuBtn.innerHTML = '<i class="bi bi-three-dots-vertical"></i>';
+            searchBox.appendChild(menuBtn);
+            // 菜单弹窗逻辑
+            let menuModal = document.querySelector('.mobile-menu-modal');
+            const menuModalHTML = `
+                <div class="menu-title">操作菜单</div>
+                <button class="menu-btn" id="m-add"><i class="bi bi-plus"></i> 新增</button>
+                <button class="menu-btn" id="m-import"><i class="bi bi-upload"></i> 导入</button>
+                <button class="menu-btn" id="m-export"><i class="bi bi-download"></i> 导出</button>
+                <button class="menu-btn" id="m-batch-scan"><i class="bi bi-qr-code-scan"></i> 批量扫码导入</button>
+                <button class="menu-btn" id="m-gist-backup"><i class="bi bi-cloud-upload"></i> Gist 备份</button>
+                <button class="menu-btn" id="m-gist-restore"><i class="bi bi-cloud-download"></i> Gist 恢复</button>
+                <button class="menu-btn" id="m-close"><i class="bi bi-x"></i> 关闭</button>
+            `;
+            if (!menuModal) {
+              menuModal = document.createElement('div');
+              menuModal.className = 'mobile-menu-modal';
+              document.body.appendChild(menuModal);
+            }
+            menuModal.innerHTML = menuModalHTML;
+            menuBtn.onclick = () => { menuModal.classList.add('show'); };
+            // 绑定关闭按钮事件
+            const closeBtn = menuModal.querySelector('#m-close');
+            if (closeBtn) {
+              closeBtn.onclick = () => { menuModal.classList.remove('show'); };
+            }
+            // 绑定外部点击/触摸关闭事件（先解绑再绑定，防止重复）
+            if (menuModal._closeHandlerMousedown) menuModal.removeEventListener('mousedown', menuModal._closeHandlerMousedown);
+            if (menuModal._closeHandlerTouchstart) menuModal.removeEventListener('touchstart', menuModal._closeHandlerTouchstart);
+            menuModal._closeHandlerMousedown = function(e) {
+              if (e.target === menuModal) menuModal.classList.remove('show');
+            };
+            menuModal._closeHandlerTouchstart = function(e) {
+              if (e.target === menuModal) menuModal.classList.remove('show');
+            };
+            menuModal.addEventListener('mousedown', menuModal._closeHandlerMousedown);
+            menuModal.addEventListener('touchstart', menuModal._closeHandlerTouchstart);
+            // 其它按钮事件每次都重新绑定
+            menuModal.querySelector('#m-add').onclick = () => { menuModal.classList.remove('show'); document.getElementById('add-btn').click(); };
+            menuModal.querySelector('#m-import').onclick = () => { menuModal.classList.remove('show'); document.getElementById('import-btn').click(); };
+            menuModal.querySelector('#m-export').onclick = () => { menuModal.classList.remove('show'); document.getElementById('export-btn').click(); };
+            menuModal.querySelector('#m-batch-scan').onclick = () => { menuModal.classList.remove('show'); document.getElementById('batch-scan-btn').click(); };
+            menuModal.querySelector('#m-gist-backup').onclick = () => { menuModal.classList.remove('show'); backupToGist(); };
+            menuModal.querySelector('#m-gist-restore').onclick = () => { menuModal.classList.remove('show'); restoreFromGist(); };
+          }
+        } catch (e) { /* 菜单按钮异常不影响主流程 */ }
+      }
+      // 只清空 #mainApp 内容区
+      app.innerHTML = '';
+      // 恢复光标位置
+      setTimeout(() => {
+        const input = searchBox.querySelector('#searchInput');
+        if (input) {
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
+      }, 0);
+      searchBox.querySelector('#searchInput').oninput = (e) => {
+        searchKeyword = e.target.value;
+        render();
+      };
+
+      // 工具栏
+      const batchToolbar = document.createElement('div');
+      batchToolbar.className = 'batch-toolbar';
+      batchToolbar.innerHTML = `
+        <button class="btn btn-success btn-sm" id="add-btn"><i class="bi bi-plus"></i><span> 新增</span></button>
+        <button class="btn btn-outline-primary btn-sm" id="import-btn"><i class="bi bi-upload"></i><span> 导入</span></button>
+        <button class="btn btn-outline-primary btn-sm" id="export-btn"><i class="bi bi-download"></i><span> 导出</span></button>
+        <button class="btn btn-outline-danger btn-sm" id="batch-del-btn"><i class="bi bi-trash"></i><span> 批量删除</span></button>
+        <button class="btn btn-outline-success btn-sm" id="batch-scan-btn"><i class="bi bi-qr-code-scan"></i><span> 批量扫码导入</span></button>
+        <button class="btn btn-outline-dark btn-sm" id="gist-backup-btn"><i class="bi bi-cloud-upload"></i><span> Gist 备份</span></button>
+        <button class="btn btn-outline-dark btn-sm" id="gist-restore-btn"><i class="bi bi-cloud-download"></i><span> Gist 恢复</span></button>
+      `;
+      app.appendChild(batchToolbar);
+
+      // 过滤令牌
+      let filteredTokens = tokens;
+      if (searchKeyword.trim()) {
+        const kw = searchKeyword.trim().toLowerCase();
+        filteredTokens = tokens.filter(t =>
+          (t.userInfo && t.userInfo.toLowerCase().includes(kw)) ||
+          (t.secret && t.secret.toLowerCase().includes(kw))
+        );
+      }
+
+      // 列表头部全选
+      if (filteredTokens.length > 0 && window.innerWidth > 600) {
+        const head = document.createElement('div');
+        head.className = 'd-flex align-items-center mb-2';
+        head.innerHTML = `
+          <input type="checkbox" id="selectAllCbx" class="form-check-input me-2" ${selectedIds.size === filteredTokens.length ? 'checked' : ''}>
+          <span style="font-size:0.95rem;color:#888;">全选</span>
+        `;
+        app.appendChild(head);
+      }
+
+      // 令牌列表
+      if (filteredTokens.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'token-list-empty';
+        empty.textContent = '暂无匹配的令牌';
+        app.appendChild(empty);
+      } else {
+        filteredTokens.forEach((token, idx) => {
+          const checked = selectedIds.has(token.id) ? 'checked' : '';
+          const codeVal = token.secret ? totp(token.secret) : '';
+          const codeHtml = `<span class="token-code" data-copy="${codeVal}" title="点击复制">${codeVal || '无效密钥'}</span>`;
+          let cardHtml = '';
+          if (window.innerWidth <= 600) {
+            cardHtml = `
+              <div class="card-body">
+                <div class="token-info-row">
+                  <span>${token.userInfo || '未命名'}${!token.secret ? '<span class="badge bg-danger ms-2">无密钥</span>' : ''}</span>
+                </div>
+                <div class="token-code-row">
+                  ${codeHtml}
+                  <canvas class="totp-pie" id="pie-${token.id}" width="28" height="28"></canvas>
+                </div>
+              </div>
+            `;
+          } else {
+            cardHtml = `
+              <div class="card-body">
+                <input type="checkbox" class="form-check-input me-2 select-cbx" data-id="${token.id}" ${checked}>
+                <div class="token-info" title="${token.userInfo || ''}">${token.userInfo || '未命名'}${!token.secret ? '<span class="badge bg-danger ms-2">无密钥</span>' : ''}</div>
+                ${codeHtml}
+                <div class="progress flex-grow-1 me-1">
+                  <div class="progress-bar" id="prog-${token.id}" role="progressbar" style="width:0%"></div>
+                </div>
+                <span class="token-timer" id="sec-${token.id}"></span>
+                <div class="token-actions ms-2 flex-shrink-0 d-flex gap-1">
+                  <button class="btn btn-outline-primary btn-sm" data-action="edit" data-id="${token.id}" title="编辑"><i class="bi bi-pencil"></i><span> 编辑</span></button>
+                  <button class="btn btn-outline-danger btn-sm" data-action="delete" data-id="${token.id}" title="删除"><i class="bi bi-trash"></i><span> 删除</span></button>
+                  <button class="btn btn-outline-success btn-sm" data-action="exportqr" data-id="${token.id}" title="导出二维码"><i class="bi bi-qr-code"></i><span> 导出二维码</span></button>
+                </div>
+              </div>
+            `;
+          }
+          const card = document.createElement('div');
+          card.className = 'card token-card';
+          card.innerHTML = cardHtml;
+          app.appendChild(card);
+        });
+      }
+    }
+
+    function refreshCodes() {
+      const now = Math.floor(Date.now() / 1000);
+      const remain = 30 - (now % 30);
+      const percent = ((30 - remain) / 30) * 100;
+      tokens.forEach(token => {
+        const codeEl = document.getElementById('code-' + token.id);
+        if (codeEl && token.secret) {
+          codeEl.textContent = totp(token.secret);
+        }
+        // 倒计时进度条和秒数
+        const progEl = document.getElementById('prog-' + token.id);
+        const secEl = document.getElementById('sec-' + token.id);
+        if (progEl) progEl.style.width = percent + '%';
+        if (secEl) secEl.textContent = remain + ' 秒';
+      });
+    }
+
+    function startTimer() {
+      if (timer) clearInterval(timer);
+      timer = setInterval(refreshCodes, 1000);
+    }
+
+    function bindEvents() {
+      app.addEventListener('click', e => {
+        // 如果点击的是滑动按钮，直接返回，不处理复制
+        if (e.target.closest('.swipe-btn')) return;
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        const action = btn.getAttribute('data-action');
+        const id = btn.getAttribute('data-id');
+        if (action === 'delete') {
+          tokens = tokens.filter(t => t.id !== id);
+          selectedIds.delete(id);
+          saveTokens(tokens);
+          render();
+        } else if (action === 'edit') {
+          showEditModal(id);
+        } else if (action === 'exportqr') {
+          showExportQRModal(id);
+        } else if (btn.id === 'add-btn') {
+          showAddModal();
+        } else if (btn.id === 'import-btn') {
+          showImportJson();
+        } else if (btn.id === 'export-btn') {
+          exportJson();
+        } else if (btn.id === 'batch-del-btn') {
+          if (selectedIds.size === 0) return;
+          if (confirm(`确定要删除选中的 ${selectedIds.size} 个令牌吗？此操作不可恢复！`)) {
+            tokens = tokens.filter(t => !selectedIds.has(t.id));
+            selectedIds.clear();
+            saveTokens(tokens);
+            render();
+          }
+        } else if (btn.id === 'batch-scan-btn') {
+          showScanQrModal();
+        } else if (btn.id === 'gist-backup-btn') {
+          backupToGist();
+        } else if (btn.id === 'gist-restore-btn') {
+          restoreFromGist();
+        }
+      });
+      // 复选框事件
+      app.addEventListener('change', e => {
+        const cbx = e.target;
+        if (cbx.classList.contains('select-cbx')) {
+          const id = cbx.getAttribute('data-id');
+          if (cbx.checked) {
+            selectedIds.add(id);
+          } else {
+            selectedIds.delete(id);
+          }
+          render();
+        } else if (cbx.id === 'selectAllCbx') {
+          if (cbx.checked) {
+            tokens.forEach(t => selectedIds.add(t.id));
+          } else {
+            selectedIds.clear();
+          }
+          render();
+        }
+      });
+    }
+
+    function showAddModal() {
+      const modal = document.createElement('div');
+      modal.className = 'modal fade';
+      modal.tabIndex = -1;
+      modal.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">添加 TOTP 令牌</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">用户信息</label>
+                <input type="text" class="form-control" id="addUserInfo" placeholder="如：邮箱/账号/描述">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">密钥（Base32）</label>
+                <input type="text" class="form-control" id="addSecret" placeholder="如：JBSWY3DPEHPK3PXP">
+                <div class="form-text">请确保密钥为 Base32 格式</div>
+              </div>
+              <div class="error-message" id="addError"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+              <button type="button" class="btn btn-primary" id="addConfirmBtn">添加</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      const bsModal = new bootstrap.Modal(modal);
+      bsModal.show();
+      modal.addEventListener('hidden.bs.modal', () => modal.remove());
+      document.getElementById('addConfirmBtn').onclick = () => {
+        const userInfo = document.getElementById('addUserInfo').value.trim();
+        const secret = document.getElementById('addSecret').value.trim();
+        if (!secret || !base32ToBytes(secret)) {
+          document.getElementById('addError').textContent = '密钥不能为空且必须为有效 Base32 格式';
+          return;
+        }
+        // 新增去重校验
+        if (tokens.some(t => t.userInfo === userInfo && t.secret === secret)) {
+          document.getElementById('addError').textContent = '该令牌已存在，请勿重复添加';
+          return;
+        }
+        tokens.push({ id: uuidv4(), userInfo, secret, created: Date.now() });
+        saveTokens(tokens);
+        bsModal.hide();
+        render();
+      };
+    }
+
+    function showEditModal(id) {
+      const token = tokens.find(t => t.id === id);
+      if (!token) return;
+      const modal = document.createElement('div');
+      modal.className = 'modal fade';
+      modal.tabIndex = -1;
+      modal.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">编辑 TOTP 令牌</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">用户信息</label>
+                <input type="text" class="form-control" id="editUserInfo" value="${token.userInfo || ''}">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">密钥（Base32）</label>
+                <input type="text" class="form-control" id="editSecret" value="${token.secret || ''}">
+                <div class="form-text">请确保密钥为 Base32 格式</div>
+              </div>
+              <div class="error-message" id="editError"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+              <button type="button" class="btn btn-primary" id="editConfirmBtn">保存</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      const bsModal = new bootstrap.Modal(modal);
+      bsModal.show();
+      modal.addEventListener('hidden.bs.modal', () => modal.remove());
+      document.getElementById('editConfirmBtn').onclick = () => {
+        const userInfo = document.getElementById('editUserInfo').value.trim();
+        const secret = document.getElementById('editSecret').value.trim();
+        if (!secret || !base32ToBytes(secret)) {
+          document.getElementById('editError').textContent = '密钥不能为空且必须为有效 Base32 格式';
+          return;
+        }
+        token.userInfo = userInfo;
+        token.secret = secret;
+        saveTokens(tokens);
+        bsModal.hide();
+        render();
+      };
+    }
+
+    function showImportJson() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = evt => {
+          try {
+            const arr = JSON.parse(evt.target.result);
+            if (!Array.isArray(arr)) throw new Error('格式错误');
+            let count = 0;
+            const oldTokens = tokens;
+            arr.forEach(item => {
+              if (item.secret && base32ToBytes(item.secret)) {
+                let userInfo = '';
+                if (item.userInfo) {
+                  userInfo = item.userInfo;
+                } else if (item.provider && item.description) {
+                  userInfo = item.provider + ' - ' + item.description;
+                } else if (item.provider) {
+                  userInfo = item.provider;
+                } else if (item.description) {
+                  userInfo = item.description;
+                }
+                // 去重：userInfo 和 secret 都相同则跳过
+                if (!oldTokens.some(t => t.userInfo === userInfo && t.secret === item.secret)) {
+                  tokens.push({
+                    id: uuidv4(),
+                    userInfo,
+                    secret: item.secret,
+                    created: Date.now()
+                  });
+                  count++;
+                }
+              }
+            });
+            saveTokens(tokens);
+            render();
+            if (count === 0) {
+              alert('无新令牌被导入');
+            } else {
+              alert(`成功导入 ${count} 个新令牌`);
+            }
+          } catch {
+            alert('导入失败，文件格式错误');
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
+    function exportJson() {
+      const data = JSON.stringify(tokens, null, 2);
+      const blob = new Blob([data], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'totp_tokens.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function showExportQRModal(id) {
+      const token = tokens.find(t => t.id === id);
+      if (!token) return;
+      const modal = document.createElement('div');
+      modal.className = 'modal fade';
+      modal.tabIndex = -1;
+      modal.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">导出二维码</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+              <div id="qrcode"></div>
+              <div class="mt-2">可用 Google Authenticator 等扫码导入</div>
+              <div class="error-message mt-2" id="qrcodeError"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      const bsModal = new bootstrap.Modal(modal);
+      bsModal.show();
+      modal.addEventListener('hidden.bs.modal', () => modal.remove());
+      modal.addEventListener('shown.bs.modal', () => {
+        // 生成 otpauth URI
+        const uri = `otpauth://totp/${encodeURIComponent(token.userInfo || 'TOTP')}?secret=${token.secret}&issuer=TOTPManager`;
+        try {
+          const qr = kjua({
+            text: uri,
+            size: 220,
+            render: 'canvas',
+            quiet: 2
+          });
+          const qrDiv = document.getElementById('qrcode');
+          qrDiv.innerHTML = '';
+          qrDiv.appendChild(qr);
+        } catch (e) {
+          document.getElementById('qrcodeError').textContent = '二维码生成失败: ' + e;
+        }
+      });
+    }
+
+    function showScanQrModal() {
+      const modal = document.createElement('div');
+      modal.className = 'modal fade';
+      modal.tabIndex = -1;
+      modal.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">扫码导入 TOTP</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+              <input type="file" accept="image/*" id="qrImgInput" class="form-control mb-2">
+              <video id="qrVideo" style="width:100%;max-width:300px;display:none;"></video>
+              <div class="mt-2">
+                <button class="btn btn-outline-secondary btn-sm" id="startCameraBtn"><i class="bi bi-camera-video"></i> 摄像头扫码</button>
+                <button class="btn btn-outline-secondary btn-sm" id="stopCameraBtn" style="display:none;"><i class="bi bi-x-circle"></i> 停止扫码</button>
+              </div>
+              <div class="error-message mt-2" id="qrScanError"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      const bsModal = new bootstrap.Modal(modal);
+      bsModal.show();
+      modal.addEventListener('hidden.bs.modal', () => {
+        stopCamera();
+        modal.remove();
+      });
+      // 图片扫码
+      document.getElementById('qrImgInput').onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = evt => {
+          const img = new window.Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code && code.data) {
+              handleQrData(code.data);
+            } else {
+              document.getElementById('qrScanError').textContent = '未识别到二维码';
+            }
+          };
+          img.onerror = () => {
+            document.getElementById('qrScanError').textContent = '图片加载失败';
+          };
+          img.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+      // 摄像头扫码
+      let videoStream = null;
+      function startCamera() {
+        const video = document.getElementById('qrVideo');
+        video.style.display = '';
+        document.getElementById('startCameraBtn').style.display = 'none';
+        document.getElementById('stopCameraBtn').style.display = '';
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          document.getElementById('qrScanError').textContent = '此浏览器不支持摄像头调用';
+          return;
+        }
+        navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}}).then(stream => {
+          console.log('摄像头流获取成功');
+          videoStream = stream;
+          video.srcObject = stream;
+          video.setAttribute('playsinline', true);
+          video.play();
+          scanLoop();
+        }).catch(err => {
+          console.error('摄像头流获取失败', err);
+          document.getElementById('qrScanError').textContent = '无法访问摄像头: ' + err.name;
+        });
+      }
+      function stopCamera() {
+        if (videoStream) {
+          videoStream.getTracks().forEach(track => track.stop());
+          videoStream = null;
+        }
+        const video = document.getElementById('qrVideo');
+        video.style.display = 'none';
+        document.getElementById('startCameraBtn').style.display = '';
+        document.getElementById('stopCameraBtn').style.display = 'none';
+      }
+      function scanLoop() {
+        const video = document.getElementById('qrVideo');
+        if (!videoStream) return;
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data) {
+            handleQrData(code.data);
+            stopCamera();
+            return;
+          }
+        }
+        setTimeout(scanLoop, 500);
+      }
+      function handleQrData(data) {
+        // 只支持 otpauth://totp/xxx?secret=xxx
+        if (data.startsWith('otpauth://totp/')) {
+          try {
+            const url = new URL(data);
+            const secret = url.searchParams.get('secret');
+            const userInfo = decodeURIComponent(url.pathname.slice(1));
+            if (secret && base32ToBytes(secret)) {
+              // 去重：userInfo 和 secret 都相同则跳过
+              if (!tokens.some(t => t.userInfo === userInfo && t.secret === secret)) {
+                tokens.push({id: uuidv4(), userInfo, secret, created: Date.now()});
+                saveTokens(tokens);
+                render();
+                bsModal.hide();
+                alert('成功导入 1 个令牌');
+              } else {
+                alert('该令牌已存在，无需重复导入');
+              }
+            } else {
+              document.getElementById('qrScanError').textContent = '二维码内容无效';
+            }
+          } catch {
+            document.getElementById('qrScanError').textContent = '二维码解析失败';
+          }
+        } else {
+          document.getElementById('qrScanError').textContent = '暂不支持此二维码格式';
+        }
+      }
+      document.getElementById('startCameraBtn').onclick = () => {
+        console.log('点击了摄像头扫码按钮');
+        startCamera();
+      };
+      document.getElementById('stopCameraBtn').onclick = stopCamera;
+    }
+
+    // ========== 启动 ==========
+    render();
+    bindEvents();
+    refreshCodes();
+    startTimer();
+
+    // 动态码一键复制事件
+    app.addEventListener('click', e => {
+      // 如果点击的是滑动按钮，直接返回，不处理复制
+      if (e.target.closest('.swipe-btn')) return;
+      const codeEl = e.target.closest('.token-code');
+      if (codeEl && codeEl.dataset.copy) {
+        navigator.clipboard.writeText(codeEl.dataset.copy);
+        // 简单提示（可换为更美观的toast）
+        if (window.innerWidth <= 600) {
+          alert('已复制动态码');
+        } else {
+          // PC端用气泡提示
+          const tip = document.createElement('div');
+          tip.textContent = '已复制';
+          tip.style.position = 'fixed';
+          tip.style.top = (e.clientY - 30) + 'px';
+          tip.style.left = (e.clientX - 20) + 'px';
+          tip.style.background = '#222';
+          tip.style.color = '#fff';
+          tip.style.padding = '2px 10px';
+          tip.style.borderRadius = '8px';
+          tip.style.fontSize = '0.95rem';
+          tip.style.zIndex = 9999;
+          document.body.appendChild(tip);
+          setTimeout(() => tip.remove(), 900);
+        }
+      }
+    });
+
+    // 需要定义 handleDelete/handleEdit/handleExportQR 以便滑动按钮调用
+    function handleDelete(id) {
+      // 触发删除逻辑
+      document.querySelector(`button[data-action='delete'][data-id='${id}']`).click();
+    }
+    function handleEdit(id) {
+      document.querySelector(`button[data-action='edit'][data-id='${id}']`).click();
+    }
+    function handleExportQR(id) {
+      document.querySelector(`button[data-action='exportqr'][data-id='${id}']`).click();
+    }
+
+    // 动态刷新移动端小圆饼倒计时
+    function drawTotpPie(canvas, percent) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, 28, 28);
+      // 背景灰色圆环
+      ctx.beginPath();
+      ctx.arc(14, 14, 12, 0, 2 * Math.PI);
+      ctx.strokeStyle = '#eee';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      // 剩余部分蓝色
+      ctx.beginPath();
+      ctx.arc(14, 14, 12, -Math.PI/2, -Math.PI/2 + 2 * Math.PI * percent, false);
+      ctx.strokeStyle = '#0d6efd';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
+    function refreshTotpPies() {
+      if (window.innerWidth > 600) return;
+      document.querySelectorAll('.totp-pie').forEach(canvas => {
+        const id = canvas.id.replace('pie-', '');
+        const token = tokens.find(t => t.id === id);
+        if (!token || !token.secret) return;
+        const period = 30;
+        const now = Math.floor(Date.now() / 1000);
+        const remain = period - (now % period);
+        drawTotpPie(canvas, remain / period);
+      });
+    }
+    setInterval(refreshTotpPies, 1000);
+    refreshTotpPies();
+
+    // ========== Gist 备份/恢复 ==========
+    async function getGistPAT() {
+      let pat = localStorage.getItem('gist_pat') || '';
+      if (!pat) {
+        pat = prompt('请输入你的 GitHub PAT（gist 权限）\n仅保存在本地浏览器，不会上传到服务器。');
+        if (pat) localStorage.setItem('gist_pat', pat);
+      }
+      return pat;
+    }
+    async function getOrCreateGist(pat) {
+      // 查找是否已有 totp_tokens.json 的 gist，只用第一个
+      const res = await fetch('https://api.github.com/gists', {
+        headers: { Authorization: 'token ' + pat }
+      });
+      if (!res.ok) throw new Error('获取 Gist 列表失败');
+      const gists = await res.json();
+      let gist = gists.find(g => g.files && g.files['totp_tokens.json']);
+      if (gist) return gist.id;
+      // 没有则新建
+      const createRes = await fetch('https://api.github.com/gists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'token ' + pat },
+        body: JSON.stringify({
+          description: 'TOTP 令牌自动备份',
+          public: false,
+          files: { 'totp_tokens.json': { content: JSON.stringify(tokens, null, 2) } }
+        })
+      });
+      if (!createRes.ok) throw new Error('创建 Gist 失败');
+      const data = await createRes.json();
+      return data.id;
+    }
+    async function backupToGist() {
+      const pat = await getGistPAT();
+      if (!pat) return;
+      try {
+        // 只查找并更新第一个 totp_tokens.json gist
+        const res = await fetch('https://api.github.com/gists', {
+          headers: { Authorization: 'token ' + pat }
+        });
+        if (!res.ok) throw new Error('获取 Gist 列表失败');
+        const gists = await res.json();
+        let gist = gists.find(g => g.files && g.files['totp_tokens.json']);
+        let gistId;
+        if (gist) {
+          gistId = gist.id;
+        } else {
+          // 没有则新建
+          const createRes = await fetch('https://api.github.com/gists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'token ' + pat },
+            body: JSON.stringify({
+              description: 'TOTP 令牌自动备份',
+              public: false,
+              files: { 'totp_tokens.json': { content: JSON.stringify(tokens, null, 2) } }
+            })
+          });
+          if (!createRes.ok) throw new Error('创建 Gist 失败');
+          const data = await createRes.json();
+          gistId = data.id;
+        }
+        // 更新 gist，只更新 totp_tokens.json 文件内容
+        const patchRes = await fetch('https://api.github.com/gists/' + gistId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: 'token ' + pat },
+          body: JSON.stringify({
+            files: { 'totp_tokens.json': { content: JSON.stringify(tokens, null, 2) } }
+          })
+        });
+        if (!patchRes.ok) throw new Error('Gist 更新失败');
+        alert('Gist 备份成功！');
+      } catch (e) {
+        alert('Gist 备份失败：' + e.message);
+      }
+    }
+    async function restoreFromGist() {
+      const pat = await getGistPAT();
+      if (!pat) return;
+      try {
+        // 查找 gist
+        const res = await fetch('https://api.github.com/gists', {
+          headers: { Authorization: 'token ' + pat }
+        });
+        if (!res.ok) throw new Error('获取 Gist 列表失败');
+        const gists = await res.json();
+        const gist = gists.find(g => g.files && g.files['totp_tokens.json']);
+        if (!gist) throw new Error('未找到 totp_tokens.json Gist');
+        const rawUrl = gist.files['totp_tokens.json'].raw_url;
+        const fileRes = await fetch(rawUrl);
+        if (!fileRes.ok) throw new Error('下载 Gist 文件失败');
+        const arr = await fileRes.json();
+        if (!Array.isArray(arr)) throw new Error('Gist 文件内容格式错误');
+        tokens = arr;
+        saveTokens(tokens);
+        render();
+        alert('Gist 恢复成功！');
+      } catch (e) {
+        alert('Gist 恢复失败：' + e.message);
+      }
+    }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
