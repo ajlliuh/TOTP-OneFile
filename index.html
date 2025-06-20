@@ -1463,9 +1463,7 @@
     async function getOrCreateGist(pat) {
       // 查找是否已有 totp_tokens.json 的 gist，只用第一个
       const res = await fetch('https://api.github.com/gists', {
-        headers: { 
-          Authorization: 'token ' + pat
-        }
+        headers: { Authorization: 'token ' + pat }
       });
       if (!res.ok) throw new Error('获取 Gist 列表失败');
       const gists = await res.json();
@@ -1491,9 +1489,7 @@
       try {
         // 只查找并更新第一个 totp_tokens.json gist
         const res = await fetch('https://api.github.com/gists', {
-          headers: { 
-            Authorization: 'token ' + pat
-          }
+          headers: { Authorization: 'token ' + pat }
         });
         if (!res.ok) throw new Error('获取 Gist 列表失败');
         const gists = await res.json();
@@ -1525,7 +1521,7 @@
           })
         });
         if (!patchRes.ok) throw new Error('Gist 更新失败');
-        alert(`Gist 备份成功！共备份了 ${tokens.length} 个令牌`);
+        alert('Gist 备份成功！');
       } catch (e) {
         alert('Gist 备份失败：' + e.message);
       }
@@ -1536,32 +1532,16 @@
       try {
         // 查找 gist
         const res = await fetch('https://api.github.com/gists', {
-          headers: { 
-            Authorization: 'token ' + pat
-          }
+          headers: { Authorization: 'token ' + pat }
         });
         if (!res.ok) throw new Error('获取 Gist 列表失败');
         const gists = await res.json();
         const gist = gists.find(g => g.files && g.files['totp_tokens.json']);
         if (!gist) throw new Error('未找到 totp_tokens.json Gist');
-        
-        // 直接获取Gist详细信息，确保获取最新数据
-        const gistDetailRes = await fetch('https://api.github.com/gists/' + gist.id, {
-          headers: { 
-            Authorization: 'token ' + pat
-          }
-        });
-        if (!gistDetailRes.ok) throw new Error('获取 Gist 详情失败');
-        const gistDetail = await gistDetailRes.json();
-        
-        // 从Gist详情中获取文件内容
-        const fileContent = gistDetail.files['totp_tokens.json'];
-        if (!fileContent || !fileContent.content) {
-          throw new Error('Gist 文件内容为空');
-        }
-        
-        // 解析JSON内容
-        const arr = JSON.parse(fileContent.content);
+        const rawUrl = gist.files['totp_tokens.json'].raw_url;
+        const fileRes = await fetch(rawUrl);
+        if (!fileRes.ok) throw new Error('下载 Gist 文件失败');
+        const arr = await fileRes.json();
         if (!Array.isArray(arr)) throw new Error('Gist 文件内容格式错误');
         
         // 恢复令牌数据
@@ -1572,7 +1552,7 @@
         saveTokens(tokens);
         // 重新渲染界面
         render();
-        alert(`Gist 恢复成功！共恢复了 ${tokens.length} 个令牌`);
+        alert('Gist 恢复成功！');
       } catch (e) {
         alert('Gist 恢复失败：' + e.message);
       }
@@ -1611,7 +1591,7 @@
           body: JSON.stringify(tokens, null, 2)
         });
         if (!res.ok) throw new Error(await res.text());
-        alert(`WebDAV 备份成功！共备份了 ${tokens.length} 个令牌`);
+        alert('WebDAV 备份成功！');
       } catch (e) {
         alert('WebDAV 备份失败：' + e.message);
       }
@@ -1637,95 +1617,12 @@
         saveTokens(tokens);
         // 重新渲染界面
         render();
-        alert(`WebDAV 恢复成功！共恢复了 ${tokens.length} 个令牌`);
+        alert('WebDAV 恢复成功！');
       } catch (e) {
         alert('WebDAV 恢复失败：' + e.message);
       }
     }
-
-    // ========== WebDAV 备份/恢复 ==========
-    function getWebDAVConfig() {
-      // ... existing code ...
-    }
-    async function backupToWebDAV() {
-      // ... existing code ...
-    }
-    async function restoreFromWebDAV() {
-      // ... existing code ...
-    }
-    // ... existing code ...
-    // 保留主逻辑js到这里为止
     </script>
-    <!-- 先加载 bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- 弹窗相关代码单独放在最后 -->
-    <script>
-    function showRestoreFromAccountModal() {
-      const modal = document.createElement('div');
-      modal.className = 'modal fade';
-      modal.tabIndex = -1;
-      modal.innerHTML = `
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">账号密码恢复 Gist 备份</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <div class="mb-3">
-                <label class="form-label">账号</label>
-                <input type="text" class="form-control" id="accUser" placeholder="输入账号">
-              </div>
-              <div class="mb-3">
-                <label class="form-label">密码</label>
-                <input type="password" class="form-control" id="accPass" placeholder="输入密码">
-              </div>
-              <div class="error-message" id="accError"></div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-              <button type="button" class="btn btn-primary" id="accRestoreBtn">恢复</button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-      const bsModal = new bootstrap.Modal(modal);
-      bsModal.show();
-      modal.addEventListener('hidden.bs.modal', () => modal.remove());
-      document.getElementById('accRestoreBtn').onclick = async () => {
-        const username = document.getElementById('accUser').value.trim();
-        const password = document.getElementById('accPass').value.trim();
-        if (!username || !password) {
-          document.getElementById('accError').textContent = '账号和密码不能为空';
-          return;
-        }
-        try {
-          const apiUrl = window.location.origin + '/api/gist-restore';
-          const res = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
-          if (!res.ok) throw new Error('账号或密码错误');
-          const arr = await res.json();
-          if (!Array.isArray(arr)) throw new Error('Gist 文件内容格式错误');
-          tokens = arr;
-          selectedIds.clear();
-          saveTokens(tokens);
-          render();
-          bsModal.hide();
-          alert(`账号密码恢复成功！共恢复了 ${tokens.length} 个令牌`);
-        } catch (e) {
-          document.getElementById('accError').textContent = '恢复失败：' + e.message;
-        }
-      };
-    }
-    if (window.location.pathname === '/admin') {
-      window.addEventListener('DOMContentLoaded', function() {
-        showRestoreFromAccountModal();
-      });
-    }
-    </script>
 </body>
-</html>
+</html> 
