@@ -1,122 +1,138 @@
-# TOTP 管理器（纯前端单文件版）
+# TOTP令牌管理器
 
-一个高体验、兼容移动端和 PC 端的 TOTP（时间同步一次性密码）管理器，支持本地存储、二维码识别/生成、批量导入导出、GitHub Gist 云端同步、WebDAV 云端备份等功能。无需后端，数据仅存储在本地或用户云端，安全高效。
+> ⚠️ **维护状态**: 此项目已停止维护，仅作为开源代码分享。如有问题请自行解决或fork后修改。
+> 
+> [English](./README_EN.md) | 中文
 
-## 功能特性
-- 本地 TOTP 令牌管理（增删查改）
-- 支持 Base32 密钥
-- 二维码识别/生成（导入导出）
-- JSON 批量导入导出
-- GitHub Gist 云端同步（PAT 令牌）
-- WebDAV 云端备份/恢复
-- 响应式布局，移动端极简，PC 端功能丰富
-- 一键复制动态码
+一个功能强大、安全可靠的纯前端TOTP（基于时间的一次性密码）令牌管理器。无需后端服务，所有数据安全存储在浏览器本地或GitHub Gist中。单文件设计，开箱即用。
 
-## 使用方法
-1. 打开 `index.html` 即可使用，无需部署后端。
-2. 支持本地浏览器直接打开或通过 GitHub Pages、Cloudflare Pages 托管访问。
-3. 移动端仅支持基础展示和复制，PC 端支持完整管理功能。
-4. WebDAV 备份/恢复：首次使用时输入 WebDAV 服务器、用户名、密码和文件名，信息本地保存。
+## ✨ 核心功能
 
-## GitHub Gist 云端同步
-- 需在 GitHub 生成 [Personal Access Token](https://github.com/settings/tokens)（勾选 gist 权限）。
-- 在设置中输入 PAT 后可一键备份/恢复数据到 Gist。
+### 🔐 TOTP令牌管理
+- **动态码生成**: 实时生成6位数TOTP验证码，30秒自动刷新
+- **倒计时显示**: 直观的进度条和倒计时，PC端显示剩余秒数，移动端显示圆形进度
+- **一键复制**: 点击动态码即可复制到剪贴板，移动端显示复制提示
+- **令牌管理**: 添加、编辑、删除令牌，支持用户信息自定义
 
-## WebDAV 云端备份/恢复
-- 支持坚果云、Nextcloud、阿里云盘等主流 WebDAV 服务。
-- 仅需输入 WebDAV 服务器地址、用户名、密码和备份文件名。
-- 数据以 JSON 文件形式上传/下载，安全私密。
+### 📱 多平台优化
+- **响应式设计**: 完美适配桌面和移动设备
+- **移动端手势**: 
+  - 长按卡片进入多选模式
+  - 左滑删除，右滑编辑
+  - 触摸友好的操作界面
+- **深色模式**: 自动跟随系统主题切换
+- **批量操作**: 支持多选删除、批量导出
 
-## 技术要点
-- 纯前端实现，无依赖后端
-- TOTP 算法、Base32 编解码
-- 二维码识别（jsQR）、生成（kjua）
-- 本地存储、JSON 导入导出
-- WebDAV 标准协议云端同步
-- 响应式 UI 设计，适配移动端与 PC 端
+### 🔍 智能导入系统
+- **摄像头扫码**: 实时扫描二维码添加令牌
+- **图片识别**: 支持PNG、JPG、JPEG、BMP、GIF、WebP格式的二维码图片
+- **多格式文件导入**:
+  - **JSON文件**: 标准TOTP令牌数组格式
+  - **CSV文件**: 用户信息,密钥格式
+  - **TXT文件**: 支持otpauth://URI批量导入
+  - **加密文件**: 支持密码保护的加密备份文件
+- **拖拽上传**: 支持文件拖拽到指定区域批量导入
+- **重复检测**: 自动检测并跳过已存在的令牌
 
-## 部署到 GitHub Pages
-1. 上传 `index.html` 到你的仓库主分支（如 main）。
-2. 在仓库 Settings → Pages，选择 main 分支和根目录，保存。
-3. 稍等片刻即可通过 GitHub Pages 链接访问。
+### 💾 数据备份与同步
+- **本地导出**:
+  - 明文JSON格式
+  - 自定义密码加密格式
+  - 单个令牌二维码导出
+- **GitHub Gist云备份**:
+  - 支持明文和加密两种备份方式
+  - 自动创建/更新Gist文件
+  - 一键恢复功能
+  - 使用GitHub PAT进行身份验证
 
-## 部署到 Cloudflare Pages
-1. 注册并登录 [Cloudflare](https://pages.cloudflare.com/)。
-2. 新建一个 Pages 项目，选择你的 GitHub 仓库。
-3. 构建设置中，Build command 留空，Output directory 设为 `./`（根目录）。
-4. 部署后即可获得全球加速的访问链接。
+### 🛡️ 安全特性
+- **本地存储**: 所有数据存储在浏览器LocalStorage
+- **AES加密**: 使用CryptoJS进行数据加密
+- **无服务器**: 完全离线运行，无数据上传
+- **密码保护**: 支持自定义密码加密备份文件
 
-### Cloudflare Pages 优点
-- **全球 CDN 加速**：自动分发到全球各地节点，访问速度快。
-- **永久免费**：个人和小型项目无需付费。
-- **自动化部署**：每次推送到 GitHub 自动触发部署，无需手动操作。
-- **无需服务器**：纯前端静态托管，无需维护后端。
-- **自定义域名**：可绑定自己的域名，支持 HTTPS。
+## 🚀 快速开始
+
+### 方法一：直接使用
+1. 下载 `index.html` 文件
+2. 用现代浏览器（Chrome、Firefox、Safari、Edge）打开
+3. 开始添加和管理您的TOTP令牌
+
+### 方法二：Web部署
+支持部署到任何静态网站服务：
+- **GitHub Pages**: 上传到仓库并开启Pages
+- **Cloudflare Pages**: 全球CDN加速
+- **Vercel/Netlify**: 现代化部署平台
+- **自建服务器**: 任何支持静态文件的Web服务器
+
+## 📋 使用指南
+
+### 添加令牌
+1. 点击"+"按钮或使用扫码功能
+2. 输入用户信息（如邮箱、账号等）
+3. 输入Base32格式的密钥
+4. 点击添加完成
+
+### 批量导入
+1. 点击"批量扫码导入"按钮
+2. 选择文件或拖拽到指定区域
+3. 支持多种格式：二维码图片、JSON、CSV、TXT
+4. 系统自动识别并导入有效令牌
+
+### 云备份设置
+1. 获取GitHub Personal Access Token（需要gist权限）
+2. 在"Gist云备份"中配置PAT
+3. 选择加密备份或明文备份
+4. 一键备份/恢复数据
+
+### 移动端操作
+- **长按卡片**: 进入多选模式
+- **左滑卡片**: 快速删除
+- **右滑卡片**: 快速编辑
+- **点击动态码**: 复制到剪贴板
+
+## 🛠️ 技术架构
+
+- **前端框架**: Vue.js 3 (Composition API)
+- **UI组件**: Bootstrap 5 + Bootstrap Icons
+- **加密算法**: CryptoJS (AES-256)
+- **二维码处理**: jsQR (解析) + kjua (生成)
+- **TOTP算法**: 原生JavaScript实现
+- **存储**: LocalStorage + GitHub Gist API
+
+## 🔒 安全说明
+
+### 数据安全
+- 所有令牌数据仅存储在本地浏览器
+- 支持AES加密保护敏感数据
+- 无任何数据追踪或上传功能
+
+### 密码安全
+- **重要**: 加密备份的密码请务必牢记
+- 密码丢失将无法恢复加密数据
+- 建议使用强密码并妥善保管
+
+### GitHub PAT安全
+- PAT仅存储在浏览器本地
+- 建议设置较短的有效期
+- 仅需要gist权限，最小化权限范围
+
+## 📱 浏览器兼容性
+
+- ✅ Chrome 80+
+- ✅ Firefox 75+
+- ✅ Safari 13+
+- ✅ Edge 80+
+- ✅ 移动端浏览器
+
+## 🤝 贡献
+
+> ⚠️ **注意**: 此项目已停止维护，仅作为开源代码分享。如果您需要新功能或修复问题，建议fork此项目后自行修改。
+
+## 📄 许可证
+
+[MIT License](./LICENSE)
 
 ---
 
-> 本项目为纯前端单文件实现，适合个人自用或开源分享。数据仅存储于本地或用户自己的云端，安全私密。
-
-<details>
-<summary>English Version (Click to expand)</summary>
-
-# TOTP Manager (Pure Frontend Single File)
-
-A high-experience, mobile & PC compatible TOTP (Time-based One-Time Password) manager. Supports local storage, QR code scan/generation, batch import/export, GitHub Gist cloud sync, WebDAV cloud backup, all in a single HTML file. No backend, data is only stored locally or in your own cloud, safe and efficient.
-
-## Features
-- Local TOTP token management (CRUD)
-- Base32 key support
-- QR code scan/generation (import/export)
-- JSON batch import/export
-- GitHub Gist cloud sync (PAT token)
-- WebDAV cloud backup/restore
-- Responsive UI: minimal on mobile, full features on PC
-- One-click copy OTP
-
-## Usage
-1. Open `index.html` directly, no backend required.
-2. Use in browser locally or deploy via GitHub Pages/Cloudflare Pages.
-3. Mobile: basic display & copy; PC: full management features.
-4. WebDAV backup/restore: enter WebDAV server, username, password, and filename on first use. Info is saved locally.
-
-## GitHub Gist Cloud Sync
-- Generate a [Personal Access Token](https://github.com/settings/tokens) on GitHub (with gist permission).
-- Enter PAT in settings to backup/restore data to your Gist.
-
-## WebDAV Cloud Backup/Restore
-- Supports mainstream WebDAV services such as Nutstore, Nextcloud, Aliyun Drive, etc.
-- Just enter WebDAV server address, username, password, and backup filename.
-- Data is uploaded/downloaded as a JSON file, safe and private.
-
-## Tech Highlights
-- Pure frontend, no backend
-- TOTP algorithm, Base32 encode/decode
-- QR scan (jsQR), generate (kjua)
-- Local storage, JSON import/export
-- WebDAV standard protocol cloud sync
-- Responsive UI for mobile & PC
-
-## Deploy to GitHub Pages
-1. Upload `index.html` to your repo's main branch.
-2. Go to Settings → Pages, select main branch and root.
-3. Wait a moment, then access via GitHub Pages link.
-
-## Deploy to Cloudflare Pages
-1. Sign up and log in to [Cloudflare](https://pages.cloudflare.com/).
-2. Create a new Pages project, link your GitHub repo.
-3. Leave Build command empty, set Output directory to `./` (root).
-4. Deploy and get a globally accelerated link.
-
-### Advantages of Cloudflare Pages
-- Global CDN acceleration
-- Always free for personal/small projects
-- Auto-deploy on every GitHub push
-- No server needed, pure static hosting
-- Custom domain & HTTPS supported
-
----
-
-> This project is a pure frontend single-file solution, ideal for personal or open-source use. Data is only stored locally or in your own cloud, ensuring privacy and security.
-
-</details> 
+**注意**: 这是一个纯前端应用，所有功能都在浏览器中运行。请确保在安全的环境中使用，并妥善保管您的加密密码和GitHub PAT。 
