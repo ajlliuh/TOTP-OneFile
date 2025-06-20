@@ -440,17 +440,41 @@
     function base32ToBytes(base32) {
       // RFC4648 Base32 字母表
       const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-      let clean = base32.replace(/\s+/g, '').toUpperCase().replace(/=+$/, '');
-      let bits = '';
+      let clean = base32.replace(/\s+/g, '').toUpperCase();
+      
+      // 移除末尾的填充字符
+      while (clean.endsWith('=')) {
+        clean = clean.slice(0, -1);
+      }
+      
+      // 将每个字符转换为5位二进制
+      let buffer = 0;
+      let bitsLeft = 0;
+      const bytes = [];
+      
       for (let i = 0; i < clean.length; i++) {
         const val = alphabet.indexOf(clean[i]);
-        if (val === -1) return null;
-        bits += val.toString(2).padStart(5, '0');
+        if (val === -1) {
+          console.error('无效的Base32字符:', clean[i]);
+          return null;
+        }
+        
+        buffer = (buffer << 5) | val;
+        bitsLeft += 5;
+        
+        while (bitsLeft >= 8) {
+          bitsLeft -= 8;
+          const byte = (buffer >>> bitsLeft) & 0xff;
+          bytes.push(byte);
+        }
       }
-      const bytes = [];
-      for (let i = 0; i + 8 <= bits.length; i += 8) {
-        bytes.push(parseInt(bits.slice(i, i + 8), 2));
+      
+      // 处理剩余的位（如果有的话）
+      if (bitsLeft > 0) {
+        const byte = (buffer << (8 - bitsLeft)) & 0xff;
+        bytes.push(byte);
       }
+      
       return new Uint8Array(bytes);
     }
 
@@ -476,31 +500,64 @@
       return Math.floor(Date.now() / 1000 / 30);
     }
     function u8ToWordArray(u8arr) {
-      var words = [], i = 0, len = u8arr.length;
+      var words = [];
+      var i = 0;
+      var len = u8arr.length;
+      
       for (; i < len; i += 4) {
-        words.push(
-          ((u8arr[i]     << 24) | 
-           (u8arr[i + 1] << 16) | 
-           (u8arr[i + 2] << 8)  | 
-           (u8arr[i + 3] || 0)) >>> 0
-        );
+        var word = 0;
+        if (i < len) word |= (u8arr[i] & 0xff) << 24;
+        if (i + 1 < len) word |= (u8arr[i + 1] & 0xff) << 16;
+        if (i + 2 < len) word |= (u8arr[i + 2] & 0xff) << 8;
+        if (i + 3 < len) word |= (u8arr[i + 3] & 0xff);
+        words.push(word);
       }
+      
+      // 确保返回正确的字节长度
       return CryptoJS.lib.WordArray.create(words, len);
     }
     function hotp(secretBytes, counter) {
       const key = u8ToWordArray(secretBytes);
+      
+      // 将计数器转换为8字节的大端序数组
       const counterBytes = new Uint8Array(8);
-      for (let i = 7; i >= 0; --i) {
-        counterBytes[i] = counter & 0xff;
-        counter = counter >> 8;
+      // 使用BigInt来处理大整数
+      const bigCounter = BigInt(counter);
+      for (let i = 0; i < 8; i++) {
+        counterBytes[7 - i] = Number((bigCounter >> BigInt(i * 8)) & BigInt(0xff));
       }
-      const counterWord = CryptoJS.lib.WordArray.create(counterBytes);
+      
+      const counterWord = u8ToWordArray(counterBytes);
+      
+      // HMAC-SHA1: RFC 6238标准是 HMAC(key, message)
+      // CryptoJS.HmacSHA1参数顺序为 HmacSHA1(message, key)
       const hmac = CryptoJS.HmacSHA1(counterWord, key);
-      const hmacBytes = CryptoJS.enc.Hex.parse(hmac.toString());
-      const offset = hmacBytes.words[4] & 0xf;
-      const binCode = ((hmacBytes.words[Math.floor(offset / 4)] << ((offset % 4) * 8)) >>> 0) & 0xffffffff;
-      const code = (binCode & 0x7fffffff) % 1000000;
-      return leftPad(code, 6, '0');
+      
+      // 获取HMAC的十六进制字符串
+      const hmacHex = hmac.toString(CryptoJS.enc.Hex);
+      
+      // 动态截断：按照RFC 4226标准
+      // 将十六进制字符串转换为字节数组
+      const hmacBytes = [];
+      for (let i = 0; i < hmacHex.length; i += 2) {
+        hmacBytes.push(parseInt(hmacHex.substr(i, 2), 16));
+      }
+      
+      // 取最后一个字节的低4位作为偏移量
+      const lastByte = hmacBytes[hmacBytes.length - 1];
+      const offset = lastByte & 0xf;
+      
+      // 从偏移量位置取4字节，按照大端序组合
+      const fourBytes = hmacBytes.slice(offset, offset + 4);
+      let binCode = 0;
+      for (let i = 0; i < 4; i++) {
+        binCode = (binCode << 8) | fourBytes[i];
+      }
+      
+      // 清除符号位并取模
+      binCode = binCode & 0x7fffffff;
+      
+      return leftPad(binCode % 1000000, 6, '0');
     }
     function totp(secret) {
       const bytes = base32ToBytes(secret);
@@ -709,17 +766,22 @@
       const now = Math.floor(Date.now() / 1000);
       const remain = 30 - (now % 30);
       const percent = ((30 - remain) / 30) * 100;
+      
+      // 检查是否需要刷新令牌码（当倒计时从1秒变为30秒时）
+      const shouldRefresh = remain === 30;
+      
       tokens.forEach(token => {
-        const codeEl = document.getElementById('code-' + token.id);
-        if (codeEl && token.secret) {
-          codeEl.textContent = totp(token.secret);
-        }
         // 倒计时进度条和秒数
         const progEl = document.getElementById('prog-' + token.id);
         const secEl = document.getElementById('sec-' + token.id);
         if (progEl) progEl.style.width = percent + '%';
         if (secEl) secEl.textContent = remain + ' 秒';
       });
+      
+      // 如果倒计时结束，强制刷新所有令牌码
+      if (shouldRefresh) {
+        render();
+      }
     }
 
     function startTimer() {
@@ -1075,7 +1137,6 @@
           return;
         }
         navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}}).then(stream => {
-          console.log('摄像头流获取成功');
           videoStream = stream;
           video.srcObject = stream;
           video.setAttribute('playsinline', true);
@@ -1144,7 +1205,6 @@
         }
       }
       document.getElementById('startCameraBtn').onclick = () => {
-        console.log('点击了摄像头扫码按钮');
         startCamera();
       };
       document.getElementById('stopCameraBtn').onclick = stopCamera;
@@ -1321,8 +1381,14 @@
         if (!fileRes.ok) throw new Error('下载 Gist 文件失败');
         const arr = await fileRes.json();
         if (!Array.isArray(arr)) throw new Error('Gist 文件内容格式错误');
+        
+        // 恢复令牌数据
         tokens = arr;
+        // 清除所有选择状态
+        selectedIds.clear();
+        // 保存到本地存储
         saveTokens(tokens);
+        // 重新渲染界面
         render();
         alert('Gist 恢复成功！');
       } catch (e) {
@@ -1380,8 +1446,14 @@
         if (!res.ok) throw new Error(await res.text());
         const arr = await res.json();
         if (!Array.isArray(arr)) throw new Error('WebDAV 文件内容格式错误');
+        
+        // 恢复令牌数据
         tokens = arr;
+        // 清除所有选择状态
+        selectedIds.clear();
+        // 保存到本地存储
         saveTokens(tokens);
+        // 重新渲染界面
         render();
         alert('WebDAV 恢复成功！');
       } catch (e) {
