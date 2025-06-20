@@ -1072,19 +1072,58 @@
       modal.className = 'modal fade';
       modal.tabIndex = -1;
       modal.innerHTML = `
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title">扫码导入 TOTP</h5>
+              <h5 class="modal-title">批量扫码导入 TOTP</h5>
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body text-center">
-              <input type="file" accept="image/*" id="qrImgInput" class="form-control mb-2">
-              <video id="qrVideo" style="width:100%;max-width:300px;display:none;"></video>
-              <div class="mt-2">
-                <button class="btn btn-outline-secondary btn-sm" id="startCameraBtn"><i class="bi bi-camera-video"></i> 摄像头扫码</button>
-                <button class="btn btn-outline-secondary btn-sm" id="stopCameraBtn" style="display:none;"><i class="bi bi-x-circle"></i> 停止扫码</button>
+            <div class="modal-body">
+              <!-- 拖拽区域 -->
+              <div id="dropZone" class="drop-zone mb-3">
+                <div class="drop-zone-content">
+                  <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #6c757d;"></i>
+                  <h5 class="mt-2">拖拽图片文件到此处</h5>
+                  <p class="text-muted">支持 PNG、JPG、JPEG 等图片格式</p>
+                  <p class="text-muted">可以同时拖入多个文件</p>
+                </div>
               </div>
+              
+              <!-- 文件选择按钮 -->
+              <div class="text-center mb-3">
+                <input type="file" accept="image/*" id="qrImgInput" class="form-control d-none" multiple>
+                <button class="btn btn-outline-primary" onclick="document.getElementById('qrImgInput').click()">
+                  <i class="bi bi-folder2-open"></i> 选择图片文件
+                </button>
+              </div>
+              
+              <!-- 摄像头扫码 -->
+              <div class="text-center mb-3">
+                <video id="qrVideo" style="width:100%;max-width:300px;display:none;"></video>
+                <div class="mt-2">
+                  <button class="btn btn-outline-secondary btn-sm" id="startCameraBtn"><i class="bi bi-camera-video"></i> 摄像头扫码</button>
+                  <button class="btn btn-outline-secondary btn-sm" id="stopCameraBtn" style="display:none;"><i class="bi bi-x-circle"></i> 停止扫码</button>
+                </div>
+              </div>
+              
+              <!-- 处理进度 -->
+              <div id="progressArea" class="progress-area" style="display:none;">
+                <div class="progress mb-2">
+                  <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="text-center">
+                  <span id="progressText">正在处理...</span>
+                </div>
+              </div>
+              
+              <!-- 结果统计 -->
+              <div id="resultArea" class="result-area" style="display:none;">
+                <div class="alert alert-info">
+                  <h6>处理结果：</h6>
+                  <div id="resultText"></div>
+                </div>
+              </div>
+              
               <div class="error-message mt-2" id="qrScanError"></div>
             </div>
           </div>
@@ -1093,38 +1132,189 @@
       document.body.appendChild(modal);
       const bsModal = new bootstrap.Modal(modal);
       bsModal.show();
+      
+      // 添加拖拽区域样式
+      const style = document.createElement('style');
+      style.textContent = `
+        .drop-zone {
+          border: 2px dashed #dee2e6;
+          border-radius: 1rem;
+          padding: 2rem;
+          text-align: center;
+          transition: all 0.3s ease;
+          background: #f8f9fa;
+          cursor: pointer;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+          border-color: #0d6efd;
+          background: #e7f1ff;
+        }
+        .drop-zone.dragover {
+          transform: scale(1.02);
+        }
+        .progress-area, .result-area {
+          margin-top: 1rem;
+        }
+      `;
+      document.head.appendChild(style);
+      
       modal.addEventListener('hidden.bs.modal', () => {
         stopCamera();
         modal.remove();
+        style.remove();
       });
-      // 图片扫码
+      
+      // 拖拽功能
+      const dropZone = document.getElementById('dropZone');
+      let processedCount = 0;
+      let successCount = 0;
+      let totalFiles = 0;
+      
+      // 拖拽事件
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+      
+      dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+      });
+      
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+        if (files.length > 0) {
+          processFiles(files);
+        }
+      });
+      
+      // 点击拖拽区域触发文件选择
+      dropZone.addEventListener('click', () => {
+        document.getElementById('qrImgInput').click();
+      });
+      
+      // 文件选择处理
       document.getElementById('qrImgInput').onchange = e => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = evt => {
-          const img = new window.Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            if (code && code.data) {
-              handleQrData(code.data);
-            } else {
-              document.getElementById('qrScanError').textContent = '未识别到二维码';
-            }
-          };
-          img.onerror = () => {
-            document.getElementById('qrScanError').textContent = '图片加载失败';
-          };
-          img.src = evt.target.result;
-        };
-        reader.readAsDataURL(file);
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+          processFiles(files);
+        }
       };
+      
+      // 批量处理文件
+      async function processFiles(files) {
+        totalFiles = files.length;
+        processedCount = 0;
+        successCount = 0;
+        
+        // 显示进度区域
+        document.getElementById('progressArea').style.display = 'block';
+        document.getElementById('resultArea').style.display = 'none';
+        document.getElementById('qrScanError').textContent = '';
+        
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          progressText.textContent = `正在处理: ${file.name} (${i + 1}/${totalFiles})`;
+          progressBar.style.width = `${((i + 1) / totalFiles) * 100}%`;
+          
+          try {
+            const result = await processImageFile(file);
+            if (result) successCount++;
+          } catch (error) {
+            console.error('处理文件失败:', file.name, error);
+          }
+          processedCount++;
+        }
+        
+        // 显示结果
+        showResults();
+      }
+      
+      // 处理单个图片文件
+      function processImageFile(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = evt => {
+            const img = new window.Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const code = jsQR(imageData.data, imageData.width, imageData.height);
+              if (code && code.data) {
+                const result = handleQrData(code.data, file.name);
+                resolve(result);
+              } else {
+                resolve(false);
+              }
+            };
+            img.onerror = () => {
+              reject(new Error('图片加载失败'));
+            };
+            img.src = evt.target.result;
+          };
+          reader.onerror = () => reject(new Error('文件读取失败'));
+          reader.readAsDataURL(file);
+        });
+      }
+      
+      // 显示处理结果
+      function showResults() {
+        document.getElementById('progressArea').style.display = 'none';
+        document.getElementById('resultArea').style.display = 'block';
+        
+        const resultText = document.getElementById('resultText');
+        resultText.innerHTML = `
+          <div>总文件数: ${totalFiles}</div>
+          <div>成功导入: ${successCount}</div>
+          <div>失败文件: ${totalFiles - successCount}</div>
+        `;
+        
+        if (successCount > 0) {
+          // 延迟关闭弹窗，让用户看到结果
+          setTimeout(() => {
+            bsModal.hide();
+          }, 2000);
+        }
+      }
+      
+      // 修改后的handleQrData函数，支持批量处理
+      function handleQrData(data, fileName = '') {
+        // 只支持 otpauth://totp/xxx?secret=xxx
+        if (data.startsWith('otpauth://totp/')) {
+          try {
+            const url = new URL(data);
+            const secret = url.searchParams.get('secret');
+            const userInfo = decodeURIComponent(url.pathname.slice(1));
+            if (secret && base32ToBytes(secret)) {
+              // 去重：userInfo 和 secret 都相同则跳过
+              if (!tokens.some(t => t.userInfo === userInfo && t.secret === secret)) {
+                tokens.push({id: uuidv4(), userInfo, secret, created: Date.now()});
+                saveTokens(tokens);
+                render();
+                return true; // 成功导入
+              } else {
+                return false; // 已存在，不算成功
+              }
+            } else {
+              return false; // 无效密钥
+            }
+          } catch {
+            return false; // 解析失败
+          }
+        } else {
+          return false; // 不支持格式
+        }
+      }
+      
       // 摄像头扫码
       let videoStream = null;
       function startCamera() {
@@ -1175,34 +1365,6 @@
           }
         }
         setTimeout(scanLoop, 500);
-      }
-      function handleQrData(data) {
-        // 只支持 otpauth://totp/xxx?secret=xxx
-        if (data.startsWith('otpauth://totp/')) {
-          try {
-            const url = new URL(data);
-            const secret = url.searchParams.get('secret');
-            const userInfo = decodeURIComponent(url.pathname.slice(1));
-            if (secret && base32ToBytes(secret)) {
-              // 去重：userInfo 和 secret 都相同则跳过
-              if (!tokens.some(t => t.userInfo === userInfo && t.secret === secret)) {
-                tokens.push({id: uuidv4(), userInfo, secret, created: Date.now()});
-                saveTokens(tokens);
-                render();
-                bsModal.hide();
-                alert('成功导入 1 个令牌');
-              } else {
-                alert('该令牌已存在，无需重复导入');
-              }
-            } else {
-              document.getElementById('qrScanError').textContent = '二维码内容无效';
-            }
-          } catch {
-            document.getElementById('qrScanError').textContent = '二维码解析失败';
-          }
-        } else {
-          document.getElementById('qrScanError').textContent = '暂不支持此二维码格式';
-        }
       }
       document.getElementById('startCameraBtn').onclick = () => {
         startCamera();
