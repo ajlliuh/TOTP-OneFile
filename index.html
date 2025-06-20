@@ -2,508 +2,258 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOTP 令牌管理器</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>TOTP令牌管理器</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            /* 不设置height/overflow，保证页面整体滚动 */
-            /* overflow-x: hidden;  // 恢复前的状态，注释掉 */
-        }
-        body { background: #f8f9fa; }
-        .token-card { width: 100%; position: relative; overflow: visible; margin-bottom: 1rem; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: none; }
-        .token-code { font-size: 1.7rem; font-weight: bold; font-family: monospace; letter-spacing: 2px; }
-        .progress { height: 5px; border-radius: 3px; background: #e9ecef; }
-        .progress-bar { background: linear-gradient(90deg, #4f8cff 0%, #6ed6ff 100%); transition: width 0.3s; }
-        .search-box { margin-bottom: 1rem; }
-        .qr-scanner { max-width: 300px; margin: 0 auto; }
-        .token-actions { margin-top: 0.5rem; }
-        .token-actions button { margin-right: 0.5rem; min-width: 80px; }
-        .token-actions .btn { border-radius: 1.5rem; }
-        .modal-dialog { max-width: 500px; }
-        .token-info { font-size: 1rem; color: #555; font-weight: 500; }
-        .token-valid { color: #198754; }
-        .token-invalid { color: #dc3545; }
-        .error-message { color: #dc3545; font-size: 0.95rem; margin-top: 0.5rem; }
-        .backup-list { max-height: 300px; overflow-y: auto; }
-        .token-list-empty { color: #aaa; text-align: center; margin: 2rem 0; font-size: 1.1rem; }
-        .token-editable { background: #fffbe6; }
-        .token-editable input { font-size: 1rem; }
-        .token-editable .btn { margin-left: 0.5rem; }
-        .token-card .form-control { font-size: 1rem; border-radius: 0.5rem; }
-        .token-card .btn { font-size: 1rem; border-radius: 1.5rem; }
-        .token-card .form-label { font-size: 1rem; color: #888; }
-        .token-card .form-text { font-size: 0.9rem; color: #aaa; }
-        .token-card .badge { font-size: 0.9rem; }
-        .token-card .input-group-text { font-size: 1rem; }
-        .token-card .input-group { margin-bottom: 0.5rem; }
-        .token-card .form-check-label { font-size: 1rem; }
-        .token-card .form-check-input { margin-top: 0.2rem; }
-        .token-card .form-switch { margin-bottom: 0.5rem; }
-        .token-card .form-switch .form-check-input { width: 2.5em; height: 1.2em; }
-        .token-card .form-switch .form-check-label { margin-left: 0.5em; }
-        .token-card .form-switch .form-check-input:checked { background-color: #198754; border-color: #198754; }
-        .token-card .form-switch .form-check-input:focus { box-shadow: none; }
-        .token-card .form-switch .form-check-input:active { background-color: #198754; border-color: #198754; }
-        .token-card .form-switch .form-check-input:checked:after { background-color: #fff; }
-        .token-card .form-switch .form-check-input:after { background-color: #fff; }
-        .token-card .form-switch .form-check-input:checked:before { background-color: #fff; }
-        .token-card .form-switch .form-check-input:before { background-color: #fff; }
-        .token-card .form-switch .form-check-input:checked:after { background-color: #fff; }
-        .token-card .form-switch .form-check-input:after { background-color: #fff; }
-        .token-card .form-switch .form-check-input:checked:before { background-color: #fff; }
-        .token-card .form-switch .form-check-input:before { background-color: #fff; }
-        /* 工具栏美化 */
-        .mb-3.d-flex.flex-wrap.gap-2.justify-content-between.align-items-center {
-          background: #fff; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.03); padding: 1rem 1.2rem; margin-bottom: 1.5rem !important;
-        }
-        .btn { transition: box-shadow 0.2s, background 0.2s; }
-        .btn:active, .btn:focus { box-shadow: 0 0 0 0.15rem #4f8cff33; }
-        .btn-outline-primary:hover, .btn-outline-info:hover { background: #e6f0ff; }
-        .btn-outline-danger:hover { background: #ffeaea; }
-        .btn[disabled] { opacity: 0.6; pointer-events: none; }
-        /* 响应式适配 */
-        @media (min-width: 601px) {
-          .token-card .card-body {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            justify-content: flex-start !important;
-            padding: 0.7rem 1.2rem;
-            gap: 1.2rem;
-            min-height: 56px;
-          }
-          .token-info {
-            font-size: 1.1rem;
-            margin-bottom: 0 !important;
-            white-space: normal;
-            word-break: break-all;
-            flex: 1 1 0%;
-            min-width: 0;
-          }
-          .token-code {
-            font-size: 1.5rem;
-            font-weight: bold;
-            letter-spacing: 2px;
-            cursor: pointer;
-            margin: 0 1.2rem 0 0.5rem;
-            flex-shrink: 0;
-          }
-          .token-actions {
-            display: flex;
-            gap: 0.5rem;
-            flex-shrink: 0;
-          }
-          .token-actions .btn {
-            min-width: 60px;
-            padding: 0.2rem 0.7rem;
-            font-size: 1.1rem;
-          }
-          .progress {
-            height: 6px;
-            max-width: 80px;
-            margin: 0 0.5rem;
-            flex-shrink: 0;
-          }
-          .token-timer {
-            color: #888;
-            font-size: 1rem;
-            min-width: 36px;
-            display: inline-block;
-            margin-right: 1.2rem;
-            flex-shrink: 0;
-          }
-          .batch-toolbar {
-            display: flex !important;
-            gap: 0.5rem;
-            align-items: center;
-            margin-bottom: 0.5rem;
-          }
-          .batch-toolbar .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.3em;
-            font-size: 1.05rem;
-            min-width: 90px;
-          }
-          .search-box-sticky, .search-box {
-            max-width: 480px;
-            margin: 0 auto 1.5rem auto !important;
-            border-radius: 1.2rem;
-            box-shadow: 0 2px 8px #0001;
-            background: #fff;
-            padding: 0.7rem 1.2rem;
-            display: flex;
-            align-items: center;
-          }
-          .search-box .form-control {
-            border-radius: 1.2rem;
-            font-size: 1.1rem;
-            box-shadow: none;
-            border: none;
-            background: transparent;
-          }
-          .mobile-menu-btn { display: none !important; }
-        }
-        @media (max-width: 600px) {
-          .token-card {
-            border-radius: 1.2rem;
-            box-shadow: 0 2px 8px #0001;
-            margin-bottom: 0.7rem;
-            overflow: hidden;
-            background: #fff;
-            position: relative;
-            transition: box-shadow 0.2s;
-          }
-          .swipe-actions {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-          }
-          .token-card.swipe-show-left .swipe-actions,
-          .token-card.swipe-show-right .swipe-actions {
-            opacity: 1;
-            pointer-events: auto;
-          }
-          .swipe-actions .swipe-btn {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 38px;
-            height: 38px;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            color: #fff;
-            border: none;
-            outline: none;
-            pointer-events: auto;
-            transition: background 0.2s;
-            border-radius: 50%;
-            box-shadow: 0 2px 8px #0002;
-            z-index: 2;
-          }
-          .token-card.swipe-show-left .swipe-btn.delete {
-            display: flex;
-            right: 8px;
-            background: #d9534f;
-          }
-          .token-card.swipe-show-right .swipe-btn.edit {
-            display: flex;
-            left: 8px;
-            background: #0d6efd;
-          }
-          .token-card.swipe-show-right .swipe-btn.qr {
-            display: flex;
-            left: 54px;
-            background: #198754;
-          }
-          .token-card .card-body {
-            position: relative;
-            z-index: 1;
-            background: transparent;
-            border-radius: 1.2rem;
-            transition: transform 0.2s;
-            will-change: transform;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 0.2rem;
-            padding: 0.6rem 0.7rem 0.5rem 0.7rem;
-            min-height: 48px;
-          }
-          .token-info-row {
-            width: 100%;
-            font-size: 1.05rem;
-            color: #222;
-            margin-bottom: 0.1rem;
-            white-space: normal;
-            word-break: break-all;
-            line-height: 1.2;
-            text-align: left;
-          }
-          .token-code-row {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            gap: 0.5rem;
-            margin-top: 0.1rem;
-          }
-          .token-code {
-            font-size: 1.5rem;
-            font-weight: bold;
-            letter-spacing: 2px;
-            cursor: pointer;
-            color: #222;
-            flex-shrink: 0;
-          }
-          .token-timer { display: none !important; }
-          .progress { display: none !important; }
-          .totp-pie {
-            width: 28px;
-            height: 28px;
-            display: inline-block;
-            margin-left: auto;
-            flex-shrink: 0;
-            background: none;
-          }
-          .batch-toolbar { display: none !important; }
-          .search-box-sticky, .search-box {
-            margin-bottom: 1rem !important;
-            border-radius: 1.2rem;
-            box-shadow: 0 2px 8px #0001;
-            background: #fff;
-            padding: 0.2rem 0.5rem 0.2rem 0.7rem;
-            display: flex;
-            align-items: center;
-          }
-          .search-box .form-control {
-            border-radius: 1.2rem 0 0 1.2rem;
-            font-size: 1.1rem;
-            box-shadow: none;
-            border: none;
-            background: transparent;
-            height: 2.4rem;
-          }
-          .mobile-menu-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 2.4rem;
-            width: 2.4rem;
-            margin-left: 0.2rem;
-            border: none;
-            background: none;
-            border-radius: 0 1.2rem 1.2rem 0;
-            font-size: 1.5rem;
-            color: #333;
-            box-shadow: none;
-            transition: background 0.2s;
-          }
-          .mobile-menu-btn:active { background: #eee; }
-          .mobile-menu-modal {
-            position: fixed;
-            left: 0; right: 0; bottom: 0;
-            background: #fff;
-            box-shadow: 0 -2px 16px #0002;
-            border-radius: 1.2rem 1.2rem 0 0;
-            z-index: 9999;
-            padding: 1.2rem 1.2rem 1.2rem 1.2rem;
-            display: none;
-            flex-direction: column;
-            gap: 1rem;
-            animation: slideUp 0.25s;
-          }
-          .mobile-menu-modal.show { display: flex; }
-          .mobile-menu-modal .menu-title {
-            font-size: 1.1rem;
-            font-weight: bold;
-            margin-bottom: 0.7rem;
-            color: #222;
-          }
-          .mobile-menu-modal .menu-btn {
-            width: 100%;
-            font-size: 1.1rem;
-            padding: 0.7em 0;
-            border-radius: 0.7em;
-            border: none;
-            background: #f5f5f5;
-            color: #222;
-            margin-bottom: 0.2em;
-            display: flex;
-            align-items: center;
-            gap: 0.7em;
-            justify-content: flex-start;
-            transition: background 0.2s;
-          }
-          .mobile-menu-modal .menu-btn:active { background: #e0e0e0; }
-          @keyframes slideUp {
-            from { transform: translateY(100%); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-          }
-        }
-        .container {
-            position: relative;
-            width: 90vw;
-            max-width: 1200px;
-            min-width: 320px;
-            margin: 2.5rem auto;
-            box-sizing: border-box;
-        }
-        .search-box-sticky {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            width: 90vw;
-            max-width: 1200px;
-            min-width: 320px;
-            margin: 0 auto;
-            background: #f8f9fa;
-            box-shadow: 0 4px 16px #0002;
-            border-radius: 1.2rem;
-            padding: 0.7rem 1.2rem;
-            display: flex;
-            align-items: center;
-        }
-        @media (max-width: 1200px) {
-          .container, .search-box-sticky {
-            max-width: 96vw;
-            width: 96vw;
-            min-width: 0;
-          }
-        }
-        @media (max-width: 600px) {
-          .container, .search-box-sticky {
-            max-width: 100vw;
-            width: 100vw;
-            min-width: 0;
-            border-radius: 0;
-            padding-left: 0;
-            padding-right: 0;
-          }
-        }
-        /* 搜索框整体美化 */
-        .search-box-sticky, .search-box {
-          background: #fff;
-          border-radius: 1.5rem;
-          box-shadow: 0 2px 8px #0001;
-          display: flex;
-          align-items: center;
-          padding: 0.2rem 0.7rem;
-          border: 1px solid #e3e6ea;
-          max-width: 480px;
-          margin: 0 auto 1.5rem auto !important;
-        }
-        /* 去除 input-group 默认分隔线和背景 */
-        .search-box .input-group-text {
-          background: transparent;
-          border: none;
-          padding: 0 0.5rem 0 0;
-          color: #b0b8c1;
-          font-size: 1.2rem;
-          display: flex;
-          align-items: center;
-        }
-        /* 输入框无边框，圆角与整体一致 */
-        .search-box .form-control {
-          border: none;
-          box-shadow: none;
-          background: transparent;
-          border-radius: 1.5rem;
-          font-size: 1.1rem;
-          padding-left: 0.3rem;
-          padding-right: 0.3rem;
-          height: 2.2rem;
-        }
-        /* 输入框聚焦时无边框高亮 */
-        .search-box .form-control:focus {
-          box-shadow: none;
-          border: none;
-        }
-        @media (max-width: 600px) {
-          .search-box-sticky, .search-box {
-            border-radius: 0;
-            max-width: 100vw;
-            width: 100vw;
-            padding: 0.1rem 0.5rem;
-          }
-          .search-box .form-control {
-            font-size: 1rem;
-            height: 2rem;
-          }
-        }
+    body { background: #f7f8fa; }
+    .search-box-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 101;
+  width: 100%;
+  margin-bottom: 1.5rem !important;
+  background: #fff;
+  border-radius: 1.5rem;
+  box-shadow: 0 4px 16px #0002;
+  padding: 0.7rem 1.2rem;
+  display: flex;
+  align-items: center;
+  border: 1px solid #e3e6ea;
+}
+@media (max-width: 600px) {
+  .search-box-sticky {
+    flex-wrap: nowrap;
+    padding: 0.3rem 0.3rem;
+    gap: 0.2rem;
+    border-radius: 0.8rem;
+    min-height: unset;
+    box-shadow: 0 2px 8px #0001;
+  }
+  .search-box-sticky input[type="text"] {
+    font-size: 1rem;
+    height: 2.1rem;
+    padding: 0.2rem 0.6rem;
+  }
+  .search-box-sticky .btn, .search-box-sticky input[type="checkbox"] {
+    height: 2.1rem;
+    width: 2.1rem;
+    min-width: 2.1rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .search-box-sticky .dropdown-menu {
+    min-width: 8rem;
+    font-size: 1rem;
+  }
+}
+    .token-card { margin-bottom: 1rem; }
+    .token-info-row, .token-code-row { display: flex; align-items: center; justify-content: space-between; }
+    .token-code { font-size: 1.5rem; font-family: monospace; cursor: pointer; user-select: all; }
+    .totp-pie { vertical-align: middle; margin-left: 8px; }
+    #toastArea { position: fixed; top: 1.2rem; right: 1.2rem; z-index: 2000; min-width: 220px; max-width: 90vw; }
+    .toast .toast-body { word-break: break-all; white-space: pre-line; }
+    .toast { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-radius: 8px; }
+    @media (max-width: 600px) {
+      #toastArea { top: 0.5rem; right: 0.5rem; left: 0.5rem; }
+    }
+    /* 移动端卡片滑动手势样式 */
+    @media (max-width: 600px) {
+  .token-card { position: relative; overflow: visible; }
+    }
+    /* ========== 动画与自适应主题 ========== */
+    .token-card {
+      transition: box-shadow 0.2s, transform 0.2s, background 0.2s;
+    }
+    .token-card:active {
+      box-shadow: 0 2px 16px #0002;
+      background: #f0f4ff;
+    }
+    .modal-content {
+      transition: transform 0.2s, opacity 0.2s;
+      transform: scale(0.98);
+      opacity: 0.7;
+    }
+    .modal.show .modal-content {
+      transform: scale(1);
+      opacity: 1;
+    }
+    .toast {
+      transition: opacity 0.3s, transform 0.3s;
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    .toast.show, .toast.fade.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #181a1b; color: #e3e6ea; }
+      .card, .modal-content { background: #23272b; color: #e3e6ea; }
+      .search-box-sticky { background: #23272b; border-color: #333; }
+      .form-control, .form-check-input { background: #23272b; color: #e3e6ea; border-color: #444; }
+      .toast { background: #23272b; color: #e3e6ea; }
+      .btn-close, .btn-close-white { filter: invert(1); }
+      .dropdown-menu { background: #23272b; color: #e3e6ea; }
+      .progress-bar { background: #0d6efd; }
+      .form-control {
+        color: #e3e6ea !important;
+        background: #23272b;
+        border-color: #444;
+      }
+      .form-control::placeholder {
+        color: #b0b3b8 !important;
+        opacity: 1;
+      }
+      .bi-github {
+        color: #e3e6ea !important;
+        filter: none !important;
+      }
+      .btn-outline-dark .bi,
+      .btn-outline-secondary .bi {
+        color: #e3e6ea !important;
+      }
+      .dropdown-menu {
+        background: #23272b;
+        color: #e3e6ea;
+      }
+      .dropdown-menu .dropdown-item {
+        color: #e3e6ea !important;
+      }
+      .dropdown-menu .dropdown-item .bi {
+        color: #e3e6ea !important;
+      }
+      .dropdown-menu .dropdown-item:active,
+      .dropdown-menu .dropdown-item:focus,
+      .dropdown-menu .dropdown-item:hover {
+        background: #343a40 !important;
+        color: #fff !important;
+      }
+    }
     </style>
-    <!-- 必要依赖 -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    <!-- <script src="https://unpkg.com/base32.js@1.0.0/base32.min.js"></script> -->
-    <script src="https://cdn.jsdelivr.net/npm/kjua@0.1.1/dist/kjua.min.js"></script>
 </head>
 <body>
-    <div class="container mt-4">
-        <h1 class="mb-4">TOTP 令牌管理器</h1>
-        <div id="mainApp"></div>
-    </div>
+<div id="app"></div>
+<div id="toastArea"></div>
+
+<!-- Vue 3 -->
+<script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+<!-- Bootstrap 5 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<!-- Bootstrap 5 JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- CryptoJS (HMAC-SHA1 for TOTP) -->
+<script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+
     <script>
-    // ========== 内嵌 Base32 解码 ==========
+function showToast(msg, type = 'info', delay = 2200) {
+  const toastArea = document.getElementById('toastArea');
+  const id = 'toast-' + Date.now() + Math.random().toString(36).slice(2, 8);
+  const icon = type === 'success' ? 'bi-check-circle-fill' : type === 'danger' ? 'bi-x-circle-fill' : 'bi-info-circle-fill';
+  const bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : 'bg-info';
+  const html = `
+    <div id="${id}" class="toast align-items-center text-white ${bg} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="${delay}">
+      <div class="d-flex">
+        <div class="toast-body"><i class="bi ${icon} me-2"></i>${msg}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="关闭"></button>
+      </div>
+    </div>`;
+  toastArea.insertAdjacentHTML('beforeend', html);
+  const toastEl = document.getElementById(id);
+  const toast = new bootstrap.Toast(toastEl);
+  toast.show();
+  toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+}
+window.showToast = showToast;
+
+function showUndoToast(msg, onUndo, delay = 4000) {
+  const toastArea = document.getElementById('toastArea');
+  const id = 'toast-' + Date.now() + Math.random().toString(36).slice(2, 8);
+  const html = `
+    <div id="${id}" class="toast align-items-center text-white bg-danger border-0 mb-2 shadow" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="${delay}" style="min-width:260px;">
+      <div class="d-flex align-items-center px-2 py-1">
+        <i class="bi bi-x-circle-fill me-2 fs-5"></i>
+        <div class="toast-body flex-grow-1 py-0" style="font-size:1.05rem;">${msg}</div>
+        <button type="button" class="btn btn-sm btn-undo-toast ms-2 me-1" id="undoBtn${id}">撤销</button>
+        <button type="button" class="btn-close btn-close-white ms-1" data-bs-dismiss="toast" aria-label="关闭"></button>
+      </div>
+    </div>
+    <style>
+      .btn-undo-toast {
+        background: rgba(255,255,255,0.95);
+        color: #d32f2f;
+        border: none;
+        border-radius: 1.2em;
+        font-weight: 500;
+        padding: 0.2em 1.1em;
+        font-size: 1rem;
+        transition: background 0.2s, color 0.2s;
+      }
+      .btn-undo-toast:hover {
+        background: #fff;
+        color: #b71c1c;
+      }
+    </style>
+  `;
+  toastArea.insertAdjacentHTML('beforeend', html);
+  const toastEl = document.getElementById(id);
+  const toast = new bootstrap.Toast(toastEl);
+  toast.show();
+  toastEl.querySelector(`#undoBtn${id}`).onclick = () => {
+    toast.hide();
+    if (onUndo) onUndo();
+  };
+  toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+}
+
+const uuidv4 = () => (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).slice(2, 10) + Date.now());
+const { createApp, ref, reactive, computed, onMounted, watch, nextTick, provide } = Vue;
+
+// TOTP算法实现（兼容原生JS版）
     function base32ToBytes(base32) {
-      // RFC4648 Base32 字母表
       const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
       let clean = base32.replace(/\s+/g, '').toUpperCase();
-      
-      // 移除末尾的填充字符
-      while (clean.endsWith('=')) {
-        clean = clean.slice(0, -1);
-      }
-      
-      // 将每个字符转换为5位二进制
-      let buffer = 0;
-      let bitsLeft = 0;
-      const bytes = [];
-      
+  while (clean.endsWith('=')) clean = clean.slice(0, -1);
+  let buffer = 0, bitsLeft = 0, bytes = [];
       for (let i = 0; i < clean.length; i++) {
         const val = alphabet.indexOf(clean[i]);
-        if (val === -1) {
-          console.error('无效的Base32字符:', clean[i]);
-          return null;
-        }
-        
+    if (val === -1) return null;
         buffer = (buffer << 5) | val;
         bitsLeft += 5;
-        
         while (bitsLeft >= 8) {
           bitsLeft -= 8;
-          const byte = (buffer >>> bitsLeft) & 0xff;
-          bytes.push(byte);
-        }
-      }
-      
-      // 处理剩余的位（如果有的话）
-      if (bitsLeft > 0) {
-        const byte = (buffer << (8 - bitsLeft)) & 0xff;
-        bytes.push(byte);
-      }
-      
-      return new Uint8Array(bytes);
+      bytes.push((buffer >>> bitsLeft) & 0xff);
     }
-
-    // ========== 配置 ==========
-    // 已移除 GitHub 相关配置
-
-    // ========== OAuth PKCE 工具 ==========
-    // 已移除 GitHub OAuth 相关函数
-
-    // ========== 工具函数 ==========
-    function uuidv4() {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-      });
+  }
+  if (bitsLeft > 0) bytes.push((buffer << (8 - bitsLeft)) & 0xff);
+      return new Uint8Array(bytes);
     }
     function leftPad(str, len, pad) {
       str = String(str);
       while (str.length < len) str = pad + str;
       return str;
     }
-    function getTimeStep() {
-      return Math.floor(Date.now() / 1000 / 30);
-    }
-    function u8ToWordArray(u8arr) {
-      var words = [];
-      var i = 0;
-      var len = u8arr.length;
-      
+function hotp(secretBytes, counter) {
+  // 兼容uuidv4和window.Crypto
+  const key = secretBytes;
+  const counterBytes = new Uint8Array(8);
+  let tmp = counter;
+  for (let i = 7; i >= 0; --i) {
+    counterBytes[i] = tmp & 0xff;
+    tmp = tmp >> 8;
+  }
+  // HMAC-SHA1
+  const crypto = window.crypto || window.msCrypto;
+  if (!crypto || !crypto.subtle) return '无效密钥';
+  // 这里用同步polyfill（兼容性更好）
+  // 直接用jsSHA1实现
+  // 由于CDN限制，这里用window.CryptoJS（如有）
+  if (window.CryptoJS) {
+    const u8ToWordArray = (u8arr) => {
+      var words = [], i = 0, len = u8arr.length;
       for (; i < len; i += 4) {
         var word = 0;
         if (i < len) word |= (u8arr[i] & 0xff) << 24;
@@ -512,914 +262,251 @@
         if (i + 3 < len) word |= (u8arr[i + 3] & 0xff);
         words.push(word);
       }
-      
-      // 确保返回正确的字节长度
-      return CryptoJS.lib.WordArray.create(words, len);
-    }
-    function hotp(secretBytes, counter) {
-      const key = u8ToWordArray(secretBytes);
-      
-      // 将计数器转换为8字节的大端序数组
-      const counterBytes = new Uint8Array(8);
-      // 使用BigInt来处理大整数
-      const bigCounter = BigInt(counter);
-      for (let i = 0; i < 8; i++) {
-        counterBytes[7 - i] = Number((bigCounter >> BigInt(i * 8)) & BigInt(0xff));
-      }
-      
+      return window.CryptoJS.lib.WordArray.create(words, len);
+    };
+    const keyWord = u8ToWordArray(key);
       const counterWord = u8ToWordArray(counterBytes);
-      
-      // HMAC-SHA1: RFC 6238标准是 HMAC(key, message)
-      // CryptoJS.HmacSHA1参数顺序为 HmacSHA1(message, key)
-      const hmac = CryptoJS.HmacSHA1(counterWord, key);
-      
-      // 获取HMAC的十六进制字符串
-      const hmacHex = hmac.toString(CryptoJS.enc.Hex);
-      
-      // 动态截断：按照RFC 4226标准
-      // 将十六进制字符串转换为字节数组
+    const hmac = window.CryptoJS.HmacSHA1(counterWord, keyWord);
+    const hmacHex = hmac.toString(window.CryptoJS.enc.Hex);
       const hmacBytes = [];
-      for (let i = 0; i < hmacHex.length; i += 2) {
-        hmacBytes.push(parseInt(hmacHex.substr(i, 2), 16));
-      }
-      
-      // 取最后一个字节的低4位作为偏移量
-      const lastByte = hmacBytes[hmacBytes.length - 1];
-      const offset = lastByte & 0xf;
-      
-      // 从偏移量位置取4字节，按照大端序组合
-      const fourBytes = hmacBytes.slice(offset, offset + 4);
-      let binCode = 0;
-      for (let i = 0; i < 4; i++) {
-        binCode = (binCode << 8) | fourBytes[i];
-      }
-      
-      // 清除符号位并取模
-      binCode = binCode & 0x7fffffff;
-      
+    for (let i = 0; i < hmacHex.length; i += 2) hmacBytes.push(parseInt(hmacHex.substr(i, 2), 16));
+    const offset = hmacBytes[hmacBytes.length - 1] & 0xf;
+    const binCode = ((hmacBytes[offset] & 0x7f) << 24) |
+      ((hmacBytes[offset + 1] & 0xff) << 16) |
+      ((hmacBytes[offset + 2] & 0xff) << 8) |
+      (hmacBytes[offset + 3] & 0xff);
       return leftPad(binCode % 1000000, 6, '0');
+  }
+  return '无效密钥';
     }
-    function totp(secret) {
+    function totp(secret, remainTick) {
       const bytes = base32ToBytes(secret);
       if (!bytes) return '无效密钥';
-      return hotp(bytes, getTimeStep());
+      const period = 30;
+      const counter = Math.floor(Date.now() / 1000 / period);
+      return hotp(bytes, counter);
     }
 
-    // ========== 本地存储 ==========
-    const STORAGE_KEY = 'totp_tokens_v2';
-    function loadTokens() {
+createApp({
+  setup() {
+    let undoTimer = null;
+    // 全局状态
+    const tokens = ref([]); // 令牌列表
+    const selectedIds = ref([]); // 批量选择（数组）
+    const recentlyDeleted = ref(null); // 撤销删除
+    const toastList = ref([]); // Toast队列
+    const search = ref('');
+    const remain = ref(30 - (Math.floor(Date.now() / 1000) % 30));
+    const isMobile = ref(window.innerWidth <= 600);
+    const isMultiSelectMode = ref(false);
+    let longPressTimer = null;
+
+    // 定时刷新动态码与倒计时
+    setInterval(() => {
+      remain.value = 30 - (Math.floor(Date.now() / 1000) % 30);
+    }, 1000);
+    window.addEventListener('resize', () => {
+      isMobile.value = window.innerWidth <= 600;
+    });
+
+    // 启动时加载本地存储
+    onMounted(() => {
       try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-      } catch {
-        return [];
-      }
-    }
-    function saveTokens(tokens) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
-    }
+        const arr = JSON.parse(localStorage.getItem('totp_tokens') || '[]');
+        if (Array.isArray(arr)) tokens.value = arr;
+      } catch {}
+    });
+    // tokens变更自动保存
+    watch(tokens, (val) => {
+      localStorage.setItem('totp_tokens', JSON.stringify(val));
+    }, { deep: true });
 
-    // ========== UI 渲染 ==========
-    const app = document.getElementById('mainApp');
-    let tokens = loadTokens();
-    let timer = null;
-    let selectedIds = new Set();
-    let searchKeyword = '';
-
-    function render() {
-      // 搜索框只插入一次
-      let searchBox = document.querySelector('.search-box-sticky');
-      if (!searchBox) {
-        searchBox = document.createElement('div');
-        searchBox.className = 'input-group mb-3 search-box search-box-sticky';
-        searchBox.innerHTML = `
-          <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input type="text" class="form-control" id="searchInput" placeholder="搜索令牌（支持名称、密钥等）" value="${searchKeyword}">
-        `;
-        // 若body第一个元素不是search-box-sticky，则插入到body最前面
-        if (!document.body.firstElementChild || !document.body.firstElementChild.classList.contains('search-box-sticky')) {
-          document.body.insertBefore(searchBox, document.body.firstChild);
-        }
-      } else {
-        searchBox.querySelector('#searchInput').value = searchKeyword;
-      }
-      // 移动端插入菜单按钮
-      if (window.innerWidth <= 600) {
-        try {
-          if (!searchBox.querySelector('.mobile-menu-btn')) {
-            const menuBtn = document.createElement('button');
-            menuBtn.className = 'mobile-menu-btn';
-            menuBtn.type = 'button';
-            menuBtn.innerHTML = '<i class="bi bi-three-dots-vertical"></i>';
-            searchBox.appendChild(menuBtn);
-            // 菜单弹窗逻辑
-            let menuModal = document.querySelector('.mobile-menu-modal');
-            const menuModalHTML = `
-                <div class="menu-title">操作菜单</div>
-                <button class="menu-btn" id="m-add"><i class="bi bi-plus"></i> 新增</button>
-                <button class="menu-btn" id="m-import"><i class="bi bi-upload"></i> 导入</button>
-                <button class="menu-btn" id="m-export"><i class="bi bi-download"></i> 导出</button>
-                <button class="menu-btn" id="m-batch-scan"><i class="bi bi-qr-code-scan"></i> 批量扫码导入</button>
-                <button class="menu-btn" id="m-gist-backup"><i class="bi bi-cloud-upload"></i> Gist 备份</button>
-                <button class="menu-btn" id="m-gist-restore"><i class="bi bi-cloud-download"></i> Gist 恢复</button>
-                <button class="menu-btn" id="m-webdav-backup"><i class="bi bi-cloud-upload"></i> WebDAV 备份</button>
-                <button class="menu-btn" id="m-webdav-restore"><i class="bi bi-cloud-download"></i> WebDAV 恢复</button>
-                <button class="menu-btn" id="m-close"><i class="bi bi-x"></i> 关闭</button>
-            `;
-            if (!menuModal) {
-              menuModal = document.createElement('div');
-              menuModal.className = 'mobile-menu-modal';
-              document.body.appendChild(menuModal);
-            }
-            menuModal.innerHTML = menuModalHTML;
-            menuBtn.onclick = () => { menuModal.classList.add('show'); };
-            // 绑定关闭按钮事件
-            const closeBtn = menuModal.querySelector('#m-close');
-            if (closeBtn) {
-              closeBtn.onclick = () => { menuModal.classList.remove('show'); };
-            }
-            // 绑定外部点击/触摸关闭事件（先解绑再绑定，防止重复）
-            if (menuModal._closeHandlerMousedown) menuModal.removeEventListener('mousedown', menuModal._closeHandlerMousedown);
-            if (menuModal._closeHandlerTouchstart) menuModal.removeEventListener('touchstart', menuModal._closeHandlerTouchstart);
-            menuModal._closeHandlerMousedown = function(e) {
-              if (e.target === menuModal) menuModal.classList.remove('show');
-            };
-            menuModal._closeHandlerTouchstart = function(e) {
-              if (e.target === menuModal) menuModal.classList.remove('show');
-            };
-            menuModal.addEventListener('mousedown', menuModal._closeHandlerMousedown);
-            menuModal.addEventListener('touchstart', menuModal._closeHandlerTouchstart);
-            // 其它按钮事件每次都重新绑定
-            menuModal.querySelector('#m-add').onclick = () => { menuModal.classList.remove('show'); document.getElementById('add-btn').click(); };
-            menuModal.querySelector('#m-import').onclick = () => { menuModal.classList.remove('show'); document.getElementById('import-btn').click(); };
-            menuModal.querySelector('#m-export').onclick = () => { menuModal.classList.remove('show'); document.getElementById('export-btn').click(); };
-            menuModal.querySelector('#m-batch-scan').onclick = () => { menuModal.classList.remove('show'); document.getElementById('batch-scan-btn').click(); };
-            menuModal.querySelector('#m-gist-backup').onclick = () => { menuModal.classList.remove('show'); backupToGist(); };
-            menuModal.querySelector('#m-gist-restore').onclick = () => { menuModal.classList.remove('show'); restoreFromGist(); };
-            menuModal.querySelector('#m-webdav-backup').onclick = () => { menuModal.classList.remove('show'); backupToWebDAV(); };
-            menuModal.querySelector('#m-webdav-restore').onclick = () => { menuModal.classList.remove('show'); restoreFromWebDAV(); };
-          }
-        } catch (e) { /* 菜单按钮异常不影响主流程 */ }
-      }
-      // 只清空 #mainApp 内容区
-      app.innerHTML = '';
-      // 恢复光标位置
-      setTimeout(() => {
-        const input = searchBox.querySelector('#searchInput');
-        if (input) {
-          input.focus();
-          input.setSelectionRange(input.value.length, input.value.length);
-        }
-      }, 0);
-      searchBox.querySelector('#searchInput').oninput = (e) => {
-        searchKeyword = e.target.value;
-        render();
-      };
-
-      // 工具栏
-      const batchToolbar = document.createElement('div');
-      batchToolbar.className = 'batch-toolbar';
-      batchToolbar.innerHTML = `
-        <button class="btn btn-success btn-sm" id="add-btn"><i class="bi bi-plus"></i><span> 新增</span></button>
-        <button class="btn btn-outline-primary btn-sm" id="import-btn"><i class="bi bi-upload"></i><span> 导入</span></button>
-        <button class="btn btn-outline-primary btn-sm" id="export-btn"><i class="bi bi-download"></i><span> 导出</span></button>
-        <button class="btn btn-outline-danger btn-sm" id="batch-del-btn"><i class="bi bi-trash"></i><span> 批量删除</span></button>
-        <button class="btn btn-outline-success btn-sm" id="batch-scan-btn"><i class="bi bi-qr-code-scan"></i><span> 批量扫码导入</span></button>
-        <button class="btn btn-outline-dark btn-sm" id="gist-backup-btn"><i class="bi bi-cloud-upload"></i><span> Gist 备份</span></button>
-        <button class="btn btn-outline-dark btn-sm" id="gist-restore-btn"><i class="bi bi-cloud-download"></i><span> Gist 恢复</span></button>
-        <button class="btn btn-outline-dark btn-sm" id="webdav-backup-btn"><i class="bi bi-cloud-upload"></i><span> WebDAV 备份</span></button>
-        <button class="btn btn-outline-dark btn-sm" id="webdav-restore-btn"><i class="bi bi-cloud-download"></i><span> WebDAV 恢复</span></button>
-      `;
-      app.appendChild(batchToolbar);
-
-      // 过滤令牌
-      let filteredTokens = tokens;
-      if (searchKeyword.trim()) {
-        const kw = searchKeyword.trim().toLowerCase();
-        filteredTokens = tokens.filter(t =>
+    // 令牌过滤
+    const filteredTokens = computed(() => {
+      if (!search.value.trim()) return tokens.value;
+      const kw = search.value.trim().toLowerCase();
+      return tokens.value.filter(t =>
           (t.userInfo && t.userInfo.toLowerCase().includes(kw)) ||
           (t.secret && t.secret.toLowerCase().includes(kw))
         );
-      }
+    });
 
-      // 列表头部全选
-      if (filteredTokens.length > 0 && window.innerWidth > 600) {
-        const head = document.createElement('div');
-        head.className = 'd-flex align-items-center mb-2';
-        head.innerHTML = `
-          <input type="checkbox" id="selectAllCbx" class="form-check-input me-2" ${selectedIds.size === filteredTokens.length ? 'checked' : ''}>
-          <span style="font-size:0.95rem;color:#888;">全选</span>
-        `;
-        app.appendChild(head);
-      }
-
-      // 令牌列表
-      if (filteredTokens.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'token-list-empty';
-        empty.textContent = '暂无匹配的令牌';
-        app.appendChild(empty);
-      } else {
-        filteredTokens.forEach((token, idx) => {
-          const checked = selectedIds.has(token.id) ? 'checked' : '';
-          const codeVal = token.secret ? totp(token.secret) : '';
-          const codeHtml = `<span class="token-code" data-copy="${codeVal}" title="点击复制">${codeVal || '无效密钥'}</span>`;
-          let cardHtml = '';
-          if (window.innerWidth <= 600) {
-            cardHtml = `
-              <div class="card-body">
-                <div class="token-info-row">
-                  <span>${token.userInfo || '未命名'}${!token.secret ? '<span class="badge bg-danger ms-2">无密钥</span>' : ''}</span>
-                </div>
-                <div class="token-code-row">
-                  ${codeHtml}
-                  <canvas class="totp-pie" id="pie-${token.id}" width="28" height="28"></canvas>
-                </div>
-              </div>
-            `;
-          } else {
-            cardHtml = `
-              <div class="card-body">
-                <input type="checkbox" class="form-check-input me-2 select-cbx" data-id="${token.id}" ${checked}>
-                <div class="token-info" title="${token.userInfo || ''}">${token.userInfo || '未命名'}${!token.secret ? '<span class="badge bg-danger ms-2">无密钥</span>' : ''}</div>
-                ${codeHtml}
-                <div class="progress flex-grow-1 me-1">
-                  <div class="progress-bar" id="prog-${token.id}" role="progressbar" style="width:0%"></div>
-                </div>
-                <span class="token-timer" id="sec-${token.id}"></span>
-                <div class="token-actions ms-2 flex-shrink-0 d-flex gap-1">
-                  <button class="btn btn-outline-primary btn-sm" data-action="edit" data-id="${token.id}" title="编辑"><i class="bi bi-pencil"></i><span> 编辑</span></button>
-                  <button class="btn btn-outline-danger btn-sm" data-action="delete" data-id="${token.id}" title="删除"><i class="bi bi-trash"></i><span> 删除</span></button>
-                  <button class="btn btn-outline-success btn-sm" data-action="exportqr" data-id="${token.id}" title="导出二维码"><i class="bi bi-qr-code"></i><span> 导出二维码</span></button>
-                </div>
-              </div>
-            `;
-          }
-          const card = document.createElement('div');
-          card.className = 'card token-card';
-          card.innerHTML = cardHtml;
-          app.appendChild(card);
-        });
-      }
-    }
-
-    function refreshCodes() {
-      const now = Math.floor(Date.now() / 1000);
-      const remain = 30 - (now % 30);
-      const percent = ((30 - remain) / 30) * 100;
-      
-      // 检查是否需要刷新令牌码（当倒计时从1秒变为30秒时）
-      const shouldRefresh = remain === 30;
-      
-      tokens.forEach(token => {
-        // 倒计时进度条和秒数
-        const progEl = document.getElementById('prog-' + token.id);
-        const secEl = document.getElementById('sec-' + token.id);
-        if (progEl) progEl.style.width = percent + '%';
-        if (secEl) secEl.textContent = remain + ' 秒';
-      });
-      
-      // 如果倒计时结束，强制刷新所有令牌码
-      if (shouldRefresh) {
-        render();
-      }
-    }
-
-    function startTimer() {
-      if (timer) clearInterval(timer);
-      timer = setInterval(refreshCodes, 1000);
-    }
-
-    function bindEvents() {
-      app.addEventListener('click', e => {
-        // 如果点击的是滑动按钮，直接返回，不处理复制
-        if (e.target.closest('.swipe-btn')) return;
-        const btn = e.target.closest('button');
-        if (!btn) return;
-        const action = btn.getAttribute('data-action');
-        const id = btn.getAttribute('data-id');
-        if (action === 'delete') {
-          tokens = tokens.filter(t => t.id !== id);
-          selectedIds.delete(id);
-          saveTokens(tokens);
-          render();
-        } else if (action === 'edit') {
-          showEditModal(id);
-        } else if (action === 'exportqr') {
-          showExportQRModal(id);
-        } else if (btn.id === 'add-btn') {
-          showAddModal();
-        } else if (btn.id === 'import-btn') {
-          showImportJson();
-        } else if (btn.id === 'export-btn') {
-          exportJson();
-        } else if (btn.id === 'batch-del-btn') {
-          if (selectedIds.size === 0) return;
-          if (confirm(`确定要删除选中的 ${selectedIds.size} 个令牌吗？此操作不可恢复！`)) {
-            tokens = tokens.filter(t => !selectedIds.has(t.id));
-            selectedIds.clear();
-            saveTokens(tokens);
-            render();
-          }
-        } else if (btn.id === 'batch-scan-btn') {
-          showScanQrModal();
-        } else if (btn.id === 'gist-backup-btn') {
-          backupToGist();
-        } else if (btn.id === 'gist-restore-btn') {
-          restoreFromGist();
-        } else if (btn.id === 'webdav-backup-btn') {
-          backupToWebDAV();
-        } else if (btn.id === 'webdav-restore-btn') {
-          restoreFromWebDAV();
-        }
-      });
-      // 复选框事件
-      app.addEventListener('change', e => {
-        const cbx = e.target;
-        if (cbx.classList.contains('select-cbx')) {
-          const id = cbx.getAttribute('data-id');
-          if (cbx.checked) {
-            selectedIds.add(id);
-          } else {
-            selectedIds.delete(id);
-          }
-          render();
-        } else if (cbx.id === 'selectAllCbx') {
-          if (cbx.checked) {
-            tokens.forEach(t => selectedIds.add(t.id));
-          } else {
-            selectedIds.clear();
-          }
-          render();
-        }
-      });
-    }
-
-    function showAddModal() {
-      const modal = document.createElement('div');
-      modal.className = 'modal fade';
-      modal.tabIndex = -1;
-      modal.innerHTML = `
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">添加 TOTP 令牌</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <div class="mb-3">
-                <label class="form-label">用户信息</label>
-                <input type="text" class="form-control" id="addUserInfo" placeholder="如：邮箱/账号/描述">
-              </div>
-              <div class="mb-3">
-                <label class="form-label">密钥（Base32）</label>
-                <input type="text" class="form-control" id="addSecret" placeholder="如：JBSWY3DPEHPK3PXP">
-                <div class="form-text">请确保密钥为 Base32 格式</div>
-              </div>
-              <div class="error-message" id="addError"></div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-              <button type="button" class="btn btn-primary" id="addConfirmBtn">添加</button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-      const bsModal = new bootstrap.Modal(modal);
-      bsModal.show();
-      modal.addEventListener('hidden.bs.modal', () => modal.remove());
-      document.getElementById('addConfirmBtn').onclick = () => {
-        const userInfo = document.getElementById('addUserInfo').value.trim();
-        const secret = document.getElementById('addSecret').value.trim();
-        if (!secret || !base32ToBytes(secret)) {
-          document.getElementById('addError').textContent = '密钥不能为空且必须为有效 Base32 格式';
-          return;
-        }
-        // 新增去重校验
-        if (tokens.some(t => t.userInfo === userInfo && t.secret === secret)) {
-          document.getElementById('addError').textContent = '该令牌已存在，请勿重复添加';
-          return;
-        }
-        tokens.push({ id: uuidv4(), userInfo, secret, created: Date.now() });
-        saveTokens(tokens);
-        bsModal.hide();
-        render();
-      };
-    }
-
-    function showEditModal(id) {
-      const token = tokens.find(t => t.id === id);
-      if (!token) return;
-      const modal = document.createElement('div');
-      modal.className = 'modal fade';
-      modal.tabIndex = -1;
-      modal.innerHTML = `
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">编辑 TOTP 令牌</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <div class="mb-3">
-                <label class="form-label">用户信息</label>
-                <input type="text" class="form-control" id="editUserInfo" value="${token.userInfo || ''}">
-              </div>
-              <div class="mb-3">
-                <label class="form-label">密钥（Base32）</label>
-                <input type="text" class="form-control" id="editSecret" value="${token.secret || ''}">
-                <div class="form-text">请确保密钥为 Base32 格式</div>
-              </div>
-              <div class="error-message" id="editError"></div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-              <button type="button" class="btn btn-primary" id="editConfirmBtn">保存</button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-      const bsModal = new bootstrap.Modal(modal);
-      bsModal.show();
-      modal.addEventListener('hidden.bs.modal', () => modal.remove());
-      document.getElementById('editConfirmBtn').onclick = () => {
-        const userInfo = document.getElementById('editUserInfo').value.trim();
-        const secret = document.getElementById('editSecret').value.trim();
-        if (!secret || !base32ToBytes(secret)) {
-          document.getElementById('editError').textContent = '密钥不能为空且必须为有效 Base32 格式';
-          return;
-        }
-        token.userInfo = userInfo;
-        token.secret = secret;
-        saveTokens(tokens);
-        bsModal.hide();
-        render();
-      };
-    }
-
-    function showImportJson() {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json,application/json';
-      input.onchange = e => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = evt => {
-          try {
-            const arr = JSON.parse(evt.target.result);
-            if (!Array.isArray(arr)) throw new Error('格式错误');
-            let count = 0;
-            const oldTokens = tokens;
-            arr.forEach(item => {
-              if (item.secret && base32ToBytes(item.secret)) {
-                let userInfo = '';
-                if (item.userInfo) {
-                  userInfo = item.userInfo;
-                } else if (item.provider && item.description) {
-                  userInfo = item.provider + ' - ' + item.description;
-                } else if (item.provider) {
-                  userInfo = item.provider;
-                } else if (item.description) {
-                  userInfo = item.description;
-                }
-                // 去重：userInfo 和 secret 都相同则跳过
-                if (!oldTokens.some(t => t.userInfo === userInfo && t.secret === item.secret)) {
-                  tokens.push({
-                    id: uuidv4(),
-                    userInfo,
-                    secret: item.secret,
-                    created: Date.now()
-                  });
-                  count++;
-                }
-              }
-            });
-            saveTokens(tokens);
-            render();
-            if (count === 0) {
-              alert('无新令牌被导入');
-            } else {
-              alert(`成功导入 ${count} 个新令牌`);
-            }
-          } catch {
-            alert('导入失败，文件格式错误');
-          }
-        };
-        reader.readAsText(file);
-      };
-      input.click();
-    }
-
-    function exportJson() {
-      const data = JSON.stringify(tokens, null, 2);
-      const blob = new Blob([data], {type: 'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'totp_tokens.json';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }
-
-    function showExportQRModal(id) {
-      const token = tokens.find(t => t.id === id);
-      if (!token) return;
-      const modal = document.createElement('div');
-      modal.className = 'modal fade';
-      modal.tabIndex = -1;
-      modal.innerHTML = `
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">导出二维码</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center">
-              <div id="qrcode"></div>
-              <div class="mt-2">可用 Google Authenticator 等扫码导入</div>
-              <div class="error-message mt-2" id="qrcodeError"></div>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-      const bsModal = new bootstrap.Modal(modal);
-      bsModal.show();
-      modal.addEventListener('hidden.bs.modal', () => modal.remove());
-      modal.addEventListener('shown.bs.modal', () => {
-        // 生成 otpauth URI
-        const uri = `otpauth://totp/${encodeURIComponent(token.userInfo || 'TOTP')}?secret=${token.secret}&issuer=TOTPManager`;
-        try {
-          const qr = kjua({
-            text: uri,
-            size: 220,
-            render: 'canvas',
-            quiet: 2
-          });
-          const qrDiv = document.getElementById('qrcode');
-          qrDiv.innerHTML = '';
-          qrDiv.appendChild(qr);
-        } catch (e) {
-          document.getElementById('qrcodeError').textContent = '二维码生成失败: ' + e;
-        }
-      });
-    }
-
-    function showScanQrModal() {
-      const modal = document.createElement('div');
-      modal.className = 'modal fade';
-      modal.tabIndex = -1;
-      modal.innerHTML = `
-        <div class="modal-dialog modal-lg">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">批量扫码导入 TOTP</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <!-- 拖拽区域 -->
-              <div id="dropZone" class="drop-zone mb-3">
-                <div class="drop-zone-content">
-                  <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #6c757d;"></i>
-                  <h5 class="mt-2">拖拽图片文件到此处</h5>
-                  <p class="text-muted">支持 PNG、JPG、JPEG 等图片格式</p>
-                  <p class="text-muted">可以同时拖入多个文件</p>
-                </div>
-              </div>
-              
-              <!-- 文件选择按钮 -->
-              <div class="text-center mb-3">
-                <input type="file" accept="image/*" id="qrImgInput" class="form-control d-none" multiple>
-                <button class="btn btn-outline-primary" onclick="document.getElementById('qrImgInput').click()">
-                  <i class="bi bi-folder2-open"></i> 选择图片文件
-                </button>
-              </div>
-              
-              <!-- 摄像头扫码 -->
-              <div class="text-center mb-3">
-                <video id="qrVideo" style="width:100%;max-width:300px;display:none;"></video>
-                <div class="mt-2">
-                  <button class="btn btn-outline-secondary btn-sm" id="startCameraBtn"><i class="bi bi-camera-video"></i> 摄像头扫码</button>
-                  <button class="btn btn-outline-secondary btn-sm" id="stopCameraBtn" style="display:none;"><i class="bi bi-x-circle"></i> 停止扫码</button>
-                </div>
-              </div>
-              
-              <!-- 处理进度 -->
-              <div id="progressArea" class="progress-area" style="display:none;">
-                <div class="progress mb-2">
-                  <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
-                </div>
-                <div class="text-center">
-                  <span id="progressText">正在处理...</span>
-                </div>
-              </div>
-              
-              <!-- 结果统计 -->
-              <div id="resultArea" class="result-area" style="display:none;">
-                <div class="alert alert-info">
-                  <h6>处理结果：</h6>
-                  <div id="resultText"></div>
-                </div>
-              </div>
-              
-              <div class="error-message mt-2" id="qrScanError"></div>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-      const bsModal = new bootstrap.Modal(modal);
-      bsModal.show();
-      
-      // 添加拖拽区域样式
-      const style = document.createElement('style');
-      style.textContent = `
-        .drop-zone {
-          border: 2px dashed #dee2e6;
-          border-radius: 1rem;
-          padding: 2rem;
-          text-align: center;
-          transition: all 0.3s ease;
-          background: #f8f9fa;
-          cursor: pointer;
-        }
-        .drop-zone:hover, .drop-zone.dragover {
-          border-color: #0d6efd;
-          background: #e7f1ff;
-        }
-        .drop-zone.dragover {
-          transform: scale(1.02);
-        }
-        .progress-area, .result-area {
-          margin-top: 1rem;
-        }
-      `;
-      document.head.appendChild(style);
-      
-      modal.addEventListener('hidden.bs.modal', () => {
-        stopCamera();
-        modal.remove();
-        style.remove();
-      });
-      
-      // 拖拽功能
-      const dropZone = document.getElementById('dropZone');
-      let processedCount = 0;
-      let successCount = 0;
-      let totalFiles = 0;
-      
-      // 拖拽事件
-      dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-      });
-      
-      dropZone.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-      });
-      
-      dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
-        if (files.length > 0) {
-          processFiles(files);
-        }
-      });
-      
-      // 点击拖拽区域触发文件选择
-      dropZone.addEventListener('click', () => {
-        document.getElementById('qrImgInput').click();
-      });
-      
-      // 文件选择处理
-      document.getElementById('qrImgInput').onchange = e => {
-        const files = Array.from(e.target.files);
-        if (files.length > 0) {
-          processFiles(files);
-        }
-      };
-      
-      // 批量处理文件
-      async function processFiles(files) {
-        totalFiles = files.length;
-        processedCount = 0;
-        successCount = 0;
-        
-        // 显示进度区域
-        document.getElementById('progressArea').style.display = 'block';
-        document.getElementById('resultArea').style.display = 'none';
-        document.getElementById('qrScanError').textContent = '';
-        
-        const progressBar = document.getElementById('progressBar');
-        const progressText = document.getElementById('progressText');
-        
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          progressText.textContent = `正在处理: ${file.name} (${i + 1}/${totalFiles})`;
-          progressBar.style.width = `${((i + 1) / totalFiles) * 100}%`;
-          
-          try {
-            const result = await processImageFile(file);
-            if (result) successCount++;
-          } catch (error) {
-            console.error('处理文件失败:', file.name, error);
-          }
-          processedCount++;
-        }
-        
-        // 显示结果
-        showResults();
-      }
-      
-      // 处理单个图片文件
-      function processImageFile(file) {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = evt => {
-            const img = new window.Image();
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0);
-              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-              const code = jsQR(imageData.data, imageData.width, imageData.height);
-              if (code && code.data) {
-                const result = handleQrData(code.data, file.name);
-                resolve(result);
-              } else {
-                resolve(false);
-              }
-            };
-            img.onerror = () => {
-              reject(new Error('图片加载失败'));
-            };
-            img.src = evt.target.result;
-          };
-          reader.onerror = () => reject(new Error('文件读取失败'));
-          reader.readAsDataURL(file);
-        });
-      }
-      
-      // 显示处理结果
-      function showResults() {
-        document.getElementById('progressArea').style.display = 'none';
-        document.getElementById('resultArea').style.display = 'block';
-        
-        const resultText = document.getElementById('resultText');
-        resultText.innerHTML = `
-          <div>总文件数: ${totalFiles}</div>
-          <div>成功导入: ${successCount}</div>
-          <div>失败文件: ${totalFiles - successCount}</div>
-        `;
-        
-        if (successCount > 0) {
-          // 延迟关闭弹窗，让用户看到结果
-          setTimeout(() => {
-            bsModal.hide();
-          }, 2000);
-        }
-      }
-      
-      // 修改后的handleQrData函数，支持批量处理
-      function handleQrData(data, fileName = '') {
-        // 只支持 otpauth://totp/xxx?secret=xxx
-        if (data.startsWith('otpauth://totp/')) {
-          try {
-            const url = new URL(data);
-            const secret = url.searchParams.get('secret');
-            const userInfo = decodeURIComponent(url.pathname.slice(1));
-            if (secret && base32ToBytes(secret)) {
-              // 去重：userInfo 和 secret 都相同则跳过
-              if (!tokens.some(t => t.userInfo === userInfo && t.secret === secret)) {
-                tokens.push({id: uuidv4(), userInfo, secret, created: Date.now()});
-                saveTokens(tokens);
-                render();
-                return true; // 成功导入
-              } else {
-                return false; // 已存在，不算成功
-              }
-            } else {
-              return false; // 无效密钥
-            }
-          } catch {
-            return false; // 解析失败
-          }
+    // 全选checkbox联动
+    const allSelected = computed({
+      get() {
+        return filteredTokens.value.length > 0 &&
+          filteredTokens.value.every(t => selectedIds.value.includes(t.id));
+      },
+      set(val) {
+        if (val) {
+          // 只添加当前可见的
+          selectedIds.value = filteredTokens.value.map(t => t.id);
         } else {
-          return false; // 不支持格式
-        }
-      }
-      
-      // 摄像头扫码
-      let videoStream = null;
-      function startCamera() {
-        const video = document.getElementById('qrVideo');
-        video.style.display = '';
-        document.getElementById('startCameraBtn').style.display = 'none';
-        document.getElementById('stopCameraBtn').style.display = '';
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          document.getElementById('qrScanError').textContent = '此浏览器不支持摄像头调用';
-          return;
-        }
-        navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}}).then(stream => {
-          videoStream = stream;
-          video.srcObject = stream;
-          video.setAttribute('playsinline', true);
-          video.play();
-          scanLoop();
-        }).catch(err => {
-          console.error('摄像头流获取失败', err);
-          document.getElementById('qrScanError').textContent = '无法访问摄像头: ' + err.name;
-        });
-      }
-      function stopCamera() {
-        if (videoStream) {
-          videoStream.getTracks().forEach(track => track.stop());
-          videoStream = null;
-        }
-        const video = document.getElementById('qrVideo');
-        video.style.display = 'none';
-        document.getElementById('startCameraBtn').style.display = '';
-        document.getElementById('stopCameraBtn').style.display = 'none';
-      }
-      function scanLoop() {
-        const video = document.getElementById('qrVideo');
-        if (!videoStream) return;
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height);
-          if (code && code.data) {
-            handleQrData(code.data);
-            stopCamera();
-            return;
-          }
-        }
-        setTimeout(scanLoop, 500);
-      }
-      document.getElementById('startCameraBtn').onclick = () => {
-        startCamera();
-      };
-      document.getElementById('stopCameraBtn').onclick = stopCamera;
-    }
-
-    // ========== 启动 ==========
-    render();
-    bindEvents();
-    refreshCodes();
-    startTimer();
-
-    // 动态码一键复制事件
-    app.addEventListener('click', e => {
-      // 如果点击的是滑动按钮，直接返回，不处理复制
-      if (e.target.closest('.swipe-btn')) return;
-      const codeEl = e.target.closest('.token-code');
-      if (codeEl && codeEl.dataset.copy) {
-        navigator.clipboard.writeText(codeEl.dataset.copy);
-        // 简单提示（可换为更美观的toast）
-        if (window.innerWidth <= 600) {
-          alert('已复制动态码');
-        } else {
-          // PC端用气泡提示
-          const tip = document.createElement('div');
-          tip.textContent = '已复制';
-          tip.style.position = 'fixed';
-          tip.style.top = (e.clientY - 30) + 'px';
-          tip.style.left = (e.clientX - 20) + 'px';
-          tip.style.background = '#222';
-          tip.style.color = '#fff';
-          tip.style.padding = '2px 10px';
-          tip.style.borderRadius = '8px';
-          tip.style.fontSize = '0.95rem';
-          tip.style.zIndex = 9999;
-          document.body.appendChild(tip);
-          setTimeout(() => tip.remove(), 900);
+          // 只移除当前可见的
+          selectedIds.value = selectedIds.value.filter(id => !filteredTokens.value.some(t => t.id === id));
         }
       }
     });
 
-    // 需要定义 handleDelete/handleEdit/handleExportQR 以便滑动按钮调用
-    function handleDelete(id) {
-      // 触发删除逻辑
-      document.querySelector(`button[data-action='delete'][data-id='${id}']`).click();
+    // 令牌操作
+    function selectAll() {
+      selectedIds.value.splice(0, selectedIds.value.length, ...filteredTokens.value.map(t => t.id));
     }
-    function handleEdit(id) {
-      document.querySelector(`button[data-action='edit'][data-id='${id}']`).click();
+    function clearSelect() {
+      selectedIds.value.splice(0, selectedIds.value.length);
     }
-    function handleExportQR(id) {
-      document.querySelector(`button[data-action='exportqr'][data-id='${id}']`).click();
+    function deleteToken(id) {
+  const idx = tokens.value.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const token = tokens.value[idx];
+  tokens.value.splice(idx, 1);
+  selectedIds.value.splice(selectedIds.value.indexOf(id), 1);
+  recentlyDeleted.value = { token, idx };
+  // 撤销Toast
+  showUndoToast('令牌已删除', () => {
+    // 撤销操作
+    tokens.value.splice(recentlyDeleted.value.idx, 0, recentlyDeleted.value.token);
+    recentlyDeleted.value = null;
+    if (undoTimer) { clearTimeout(undoTimer); undoTimer = null; }
+    // 重新保存
+    localStorage.setItem('totp_tokens', JSON.stringify(tokens.value));
+  });
+  // 超时后才真正保存
+  if (undoTimer) clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => {
+    if (recentlyDeleted.value) {
+      localStorage.setItem('totp_tokens', JSON.stringify(tokens.value));
+      recentlyDeleted.value = null;
+    }
+  }, 4000);
+}
+function copyCode(code, event) {
+  navigator.clipboard.writeText(code).then(() => {
+    if (isMobile.value) {
+      showToast('已复制动态码', 'success');
+    } else {
+      if (event && event.clientX && event.clientY) {
+        const tip = document.createElement('div');
+        tip.textContent = '已复制';
+        tip.style.position = 'fixed';
+        tip.style.top = (event.clientY - 30) + 'px';
+        tip.style.left = (event.clientX - 20) + 'px';
+        tip.style.background = '#222';
+        tip.style.color = '#fff';
+        tip.style.padding = '2px 10px';
+        tip.style.borderRadius = '8px';
+        tip.style.fontSize = '0.95rem';
+        tip.style.zIndex = 9999;
+        document.body.appendChild(tip);
+        setTimeout(() => tip.remove(), 900);
+      } else {
+        showToast('已复制动态码', 'success');
+      }
+    }
+  }).catch(err => {
+    showToast('复制失败，请手动复制', 'danger');
+    console.error('复制失败:', err);
+  });
+}
+
+    // 进度条百分比
+    const progressPercent = computed(() => 100 - remain.value * 100 / 30);
+
+    // ========== 新增/编辑弹窗逻辑 ==========
+    const showAddModal = ref(false);
+    const showEditModal = ref(false);
+    const addForm = reactive({ userInfo: '', secret: '', error: '' });
+    const editForm = reactive({ userInfo: '', secret: '', error: '' });
+    const editingToken = ref(null);
+
+    function openAddModal() {
+      addForm.userInfo = '';
+      addForm.secret = '';
+      addForm.error = '';
+      showAddModal.value = true;
+    }
+    function addToken() {
+      const userInfo = addForm.userInfo;
+      const secret = addForm.secret;
+      if (!secret || !base32ToBytes(secret)) {
+        showToast('密钥不能为空且必须为有效 Base32 格式', 'danger');
+        return false;
+      }
+      if (tokens.value.some(t => t.userInfo === userInfo && t.secret === secret)) {
+        showToast('该令牌已存在，请勿重复添加', 'danger');
+        return false;
+      }
+      tokens.value.push({ id: uuidv4(), userInfo, secret, created: Date.now() });
+      showToast('添加成功', 'success');
+      showAddModal.value = false; // 关闭新增弹窗
+      return true;
+    }
+    function openEditModal(token) {
+      editingToken.value = token;
+      editForm.userInfo = token.userInfo;
+      editForm.secret = token.secret;
+      editForm.error = '';
+      showEditModal.value = true;
+      nextTick(() => {
+        // 聚焦第一个输入框
+        const input = document.querySelector('.modal.show input');
+        if (input) input.focus();
+      });
+    }
+    function closeEditModal() {
+      showEditModal.value = false;
+      editingToken.value = null;
+      editForm.userInfo = '';
+      editForm.secret = '';
+      editForm.error = '';
+    }
+    function saveEdit() {
+      if (!editForm.secret || !base32ToBytes(editForm.secret)) {
+        editForm.error = '密钥不能为空且必须为有效 Base32 格式';
+        return;
+      }
+      // 检查是否与其它令牌重复（排除自己）
+      if (tokens.value.some(t => t !== editingToken.value && t.userInfo === editForm.userInfo && t.secret === editForm.secret)) {
+        editForm.error = '该令牌已存在，请勿重复';
+        return;
+      }
+      editingToken.value.userInfo = editForm.userInfo;
+      editingToken.value.secret = editForm.secret;
+      closeEditModal();
     }
 
-    // 动态刷新移动端小圆饼倒计时
+    // ========== 二维码导出弹窗 ==========
+    const showQRModal = ref(false);
+    const qrToken = ref(null);
+    async function openQRModal(token) {
+      qrToken.value = token;
+      showQRModal.value = true;
+      nextTick(async () => {
+        // 生成 otpauth URI
+        const uri = `otpauth://totp/${encodeURIComponent(token.userInfo || 'TOTP')}?secret=${token.secret}&issuer=TOTPManager`;
+        const qrDiv = document.getElementById('qrcode');
+        if (qrDiv) {
+          qrDiv.innerHTML = '';
+          try {
+            await loadKjua(); // 确保 kjua 已加载
+            const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const qr = kjua({
+              text: uri || 'empty',
+              size: 220,
+              render: 'svg',
+              quiet: 2,
+              background: isDark ? '#23272b' : '#fff',
+              fill: isDark ? '#fff' : '#111'
+            });
+            qrDiv.appendChild(qr);
+          } catch (e) {
+            qrDiv.innerHTML = '<div class="text-danger">二维码生成失败</div>';
+          }
+        }
+      });
+    }
+
+    // ========== 移动端动态码小圆饼倒计时 ==========
     function drawTotpPie(canvas, percent) {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, 28, 28);
@@ -1437,63 +524,384 @@
       ctx.stroke();
     }
     function refreshTotpPies() {
-      if (window.innerWidth > 600) return;
-      document.querySelectorAll('.totp-pie').forEach(canvas => {
-        const id = canvas.id.replace('pie-', '');
-        const token = tokens.find(t => t.id === id);
-        if (!token || !token.secret) return;
+      if (!isMobile.value) return;
+      filteredTokens.value.forEach(token => {
+        const canvas = document.getElementById('pie-' + token.id);
+        if (!canvas) return;
         const period = 30;
         const now = Math.floor(Date.now() / 1000);
         const remain = period - (now % period);
         drawTotpPie(canvas, remain / period);
       });
     }
-    setInterval(refreshTotpPies, 1000);
-    refreshTotpPies();
+    onMounted(() => {
+      setInterval(refreshTotpPies, 1000);
+      nextTick(refreshTotpPies);
+    });
+
+    // ========== 批量导入多格式支持 ==========
+    async function handleFiles(files) {
+      showToast('正在处理文件，共' + files.length + '个', 'info', 1200);
+      if (!files || !files.length) {
+        showToast('未检测到文件', 'danger');
+        return;
+      }
+      scanProgress.value = { total: files.length, success: 0, fail: 0, running: true };
+      let success = 0, fail = 0;
+      for (const file of files) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (file.type.startsWith('image/')) {
+          if (await processImageFile(file)) {
+            success++;
+          } else {
+            fail++;
+          }
+        } else {
+          try {
+            const text = await readFileAsText(file);
+            let ok = false;
+            if (ext === 'json') {
+              ok = importFromJSON(text);
+            } else if (ext === 'csv') {
+              ok = importFromCSV(text);
+            } else if (ext === 'txt') {
+              ok = importFromTxt(text);
+              if (!ok) {
+                // 尝试作为加密文件处理
+                ok = importFromEncrypted(text);
+              }
+            }
+            if (ok) success++; else fail++;
+          } catch (e) {
+            fail++;
+            showToast(`文件 "${file.name}" 处理异常: ${e.message}`, 'danger');
+          }
+        }
+        scanProgress.value = { ...scanProgress.value, success, fail };
+      }
+      scanProgress.value.running = false;
+      showToast('文件导入完成，成功:' + success + '，失败:' + fail, fail ? 'danger' : 'success');
+      if (success > 0) showScanModal.value = false;
+    }
+    function importFromJSON(text) {
+      try {
+        const arr = JSON.parse(text);
+        if (!Array.isArray(arr)) {
+          showToast('JSON 文件格式错误：根元素必须是数组', 'danger');
+          return false;
+        }
+        let count = 0;
+        let skipped = 0;
+        let invalid = 0;
+        arr.forEach(item => {
+          if (item.secret && base32ToBytes(item.secret)) {
+            let userInfo = item.userInfo || item.account || '';
+            if (!tokens.value.some(t => t.userInfo === userInfo && t.secret === item.secret)) {
+              tokens.value.push({ id: uuidv4(), userInfo, secret: item.secret, created: Date.now() });
+              count++;
+            } else {
+              skipped++;
+            }
+          } else {
+            invalid++;
+          }
+        });
+        if (invalid > 0) {
+          showToast(`JSON导入：${invalid}个条目包含无效的密钥格式`, 'warning');
+        }
+        if (skipped > 0) {
+          showToast(`JSON导入完成：新增${count}个，跳过${skipped}个已存在的令牌`, count > 0 ? 'success' : 'info');
+        }
+        return count > 0;
+      } catch (e) {
+        showToast('JSON 文件格式错误：' + e.message, 'danger');
+        return false;
+      }
+    }
+    function importFromTxt(text) {
+      // 支持otpauth://URI批量导入
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      let count = 0;
+      let skipped = 0;
+      lines.forEach(line => {
+        if (line.startsWith('otpauth://totp/')) {
+          if (handleQrData(line)) {
+            count++;
+          } else {
+            // handleQrData 已经显示了跳过提示，这里只统计
+            skipped++;
+          }
+        }
+      });
+      if (skipped > 0 && count === 0) {
+        showToast(`TXT导入完成：跳过${skipped}个已存在的令牌`, 'info');
+      }
+      return count > 0;
+    }
+    function importFromCSV(text) {
+      // 简单CSV: userInfo,secret
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      let count = 0;
+      let skipped = 0;
+      let invalid = 0;
+      lines.forEach(line => {
+        const parts = line.split(',');
+        if (parts.length >= 2) {
+          const userInfo = parts[0];
+          const secret = parts[1];
+          if (secret && base32ToBytes(secret)) {
+            if (!tokens.value.some(t => t.userInfo === userInfo && t.secret === secret)) {
+              tokens.value.push({ id: uuidv4(), userInfo, secret, created: Date.now() });
+              count++;
+            } else {
+              skipped++;
+            }
+          } else {
+            invalid++;
+          }
+        }
+      });
+      if (invalid > 0) {
+        showToast(`CSV导入：${invalid}行包含无效的密钥格式`, 'warning');
+      }
+      if (skipped > 0) {
+        showToast(`CSV导入完成：新增${count}个，跳过${skipped}个已存在的令牌`, count > 0 ? 'success' : 'info');
+      }
+      return count > 0;
+    }
+    function importFromEncrypted(text) {
+      const password = prompt('请输入加密密码：');
+      if (!password) { showToast('已取消导入', 'info'); return false; }
+      try {
+        const decrypted = decryptData(text, password);
+        if (!decrypted) {
+          showToast('密码错误或文件损坏，请检查密码是否正确', 'danger');
+          return false;
+        }
+        
+        // 尝试解析为JSON
+        let parsedData;
+        try {
+          parsedData = JSON.parse(decrypted);
+        } catch (jsonError) {
+          showToast('解密成功，但文件内容不是有效的JSON格式', 'warning');
+          return false;
+        }
+        
+        // 检查是否为数组
+        if (!Array.isArray(parsedData)) {
+          showToast('解密成功，但文件内容不是有效的令牌数组格式', 'warning');
+          return false;
+        }
+        
+        // 验证数组内容
+        let count = 0;
+        let skipped = 0;
+        let invalid = 0;
+        parsedData.forEach(item => {
+          if (item.secret && base32ToBytes(item.secret)) {
+            let userInfo = item.userInfo || item.account || '';
+            if (!tokens.value.some(t => t.userInfo === userInfo && t.secret === item.secret)) {
+              tokens.value.push({ id: uuidv4(), userInfo, secret: item.secret, created: Date.now() });
+              count++;
+            } else {
+              skipped++;
+            }
+          } else {
+            invalid++;
+          }
+        });
+        
+        if (invalid > 0) {
+          showToast(`加密文件导入：${invalid}个条目包含无效的密钥格式`, 'warning');
+        }
+        if (skipped > 0) {
+          showToast(`加密文件导入完成：新增${count}个，跳过${skipped}个已存在的令牌`, count > 0 ? 'success' : 'info');
+        } else if (count > 0) {
+          showToast(`加密文件导入成功：新增${count}个令牌`, 'success');
+        } else {
+          showToast('加密文件导入完成：没有新增令牌', 'info');
+        }
+        
+        return count > 0;
+      } catch (e) {
+        showToast('解密失败: ' + e.message, 'danger');
+        return false;
+      }
+    }
+    async function processImageFile(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async evt => {
+          const img = new window.Image();
+          img.onload = async () => {
+            await loadJsQR(); // 确保 jsQR 已加载
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code && code.data && handleQrData(code.data)) resolve(true);
+            else {
+              showToast(`图片 "${file.name}" 中未检测到有效的二维码`, 'info');
+              resolve(false);
+            }
+          };
+          img.onerror = () => {
+            showToast(`图片 "${file.name}" 加载失败，请检查文件格式`, 'danger');
+            resolve(false);
+          };
+          img.src = evt.target.result;
+        };
+        reader.onerror = () => {
+          showToast(`文件 "${file.name}" 读取失败`, 'danger');
+          resolve(false);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    function handleQrData(data) {
+      if (data.startsWith('otpauth://totp/')) {
+        try {
+          const url = new URL(data);
+          const secret = url.searchParams.get('secret');
+          const userInfo = decodeURIComponent(url.pathname.slice(1));
+          if (secret && base32ToBytes(secret)) {
+            if (!tokens.value.some(t => t.userInfo === userInfo && t.secret === secret)) {
+              tokens.value.push({ id: uuidv4(), userInfo, secret, created: Date.now() });
+              return true;
+            } else {
+              // 令牌已存在，给用户提示
+              showToast(`令牌 "${userInfo}" 已存在，跳过导入`, 'info');
+              return false;
+            }
+          } else {
+            showToast(`无效的 TOTP 密钥格式: ${userInfo || '未知'}`, 'danger');
+            return false;
+          }
+        } catch (e) {
+          showToast(`无效的 otpauth URI 格式`, 'danger');
+          return false;
+        }
+      }
+      return false;
+    }
+
+    // ========== 摄像头扫码功能 ==========
+    const cameraActive = ref(false);
+    let videoStream = null;
+    function startCamera() {
+      const video = document.getElementById('qrVideo');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('此浏览器不支持摄像头调用', 'danger');
+        return;
+      }
+      navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}}).then(stream => {
+        videoStream = stream;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', true);
+        video.play();
+        cameraActive.value = true;
+        scanLoop();
+      }).catch(err => {
+        showToast('无法访问摄像头: ' + err.name, 'danger');
+      });
+    }
+    function stopCamera() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+      }
+      cameraActive.value = false;
+      const video = document.getElementById('qrVideo');
+      if (video) video.srcObject = null;
+    }
+    async function scanLoop() {
+      const video = document.getElementById('qrVideo');
+      if (!videoStream || !cameraActive.value) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        await loadJsQR(); // 确保 jsQR 已加载
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code && code.data) {
+          if (handleQrData(code.data)) {
+            showToast('扫码导入成功！', 'success');
+            // 询问用户是否继续扫描
+            if (confirm('✅ 扫码成功！\n\n是否继续扫描其他二维码？\n\n• 点击"确定"继续扫描\n• 点击"取消"停止扫描')) {
+              // 继续扫描，延迟一下避免重复扫描同一个码
+              setTimeout(scanLoop, 2000);
+            } else {
+              stopCamera();
+              showToast('已停止扫码', 'info');
+              showScanModal.value = false; // 关闭批量扫码导入弹窗
+            }
+            return;
+          }
+        }
+      }
+      setTimeout(scanLoop, 500);
+    }
 
     // ========== Gist 备份/恢复 ==========
-    async function getGistPAT() {
-      let pat = localStorage.getItem('gist_pat') || '';
-      if (!pat) {
-        pat = prompt('请输入你的 GitHub PAT（gist 权限）\n仅保存在本地浏览器，不会上传到服务器。');
-        if (pat) localStorage.setItem('gist_pat', pat);
+    const showGistModal = ref(false);
+    const gistPAT = ref(localStorage.getItem('gist_pat') || '');
+    const gistError = ref('');
+    function openGistModal() {
+      gistPAT.value = localStorage.getItem('gist_pat') || '';
+      gistError.value = '';
+      showGistModal.value = true;
+    }
+    function saveGistPAT() {
+      if (!gistPAT.value) {
+        gistError.value = 'PAT不能为空';
+        return;
       }
-      return pat;
+      localStorage.setItem('gist_pat', gistPAT.value);
+      showGistModal.value = false;
+      showToast('PAT已保存', 'success');
     }
-    async function getOrCreateGist(pat) {
-      // 查找是否已有 totp_tokens.json 的 gist，只用第一个
-      const res = await fetch('https://api.github.com/gists', {
-        headers: { Authorization: 'token ' + pat }
+    // 获取加密/解密密码的通用函数
+    async function getEncryptPassword(defaultPwd) {
+      return new Promise((resolve) => {
+        const useCustom = confirm('是否自定义加密密码？\n点击"确定"自定义，点击"取消"使用默认密码（如PAT）');
+        if (useCustom) {
+          const pwd = prompt('请输入自定义加密密码：');
+          if (!pwd) {
+            showToast('已取消操作', 'info');
+            return resolve(null);
+          }
+          resolve(pwd);
+        } else {
+          if (!defaultPwd) {
+            showToast('默认密码不能为空', 'danger');
+            return resolve(null);
+          }
+          resolve(defaultPwd);
+        }
       });
-      if (!res.ok) throw new Error('获取 Gist 列表失败');
-      const gists = await res.json();
-      let gist = gists.find(g => g.files && g.files['totp_tokens.json']);
-      if (gist) return gist.id;
-      // 没有则新建
-      const createRes = await fetch('https://api.github.com/gists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'token ' + pat },
-        body: JSON.stringify({
-          description: 'TOTP 令牌自动备份',
-          public: false,
-          files: { 'totp_tokens.json': { content: JSON.stringify(tokens, null, 2) } }
-        })
-      });
-      if (!createRes.ok) throw new Error('创建 Gist 失败');
-      const data = await createRes.json();
-      return data.id;
     }
+    // Gist加密备份
     async function backupToGist() {
-      const pat = await getGistPAT();
-      if (!pat) return;
+      if (!gistPAT.value) { showToast('请先配置PAT', 'danger'); return; }
       try {
-        // 只查找并更新第一个 totp_tokens.json gist
+        const data = JSON.stringify(tokens.value, null, 2);
+        const password = await getEncryptPassword(gistPAT.value);
+        if (!password) { showToast('已取消备份', 'info'); return; }
+        const encrypted = encryptData(data, password);
+        // 查找是否已有 totp_tokens_encrypted.txt 的 gist，只用第一个
         const res = await fetch('https://api.github.com/gists', {
-          headers: { Authorization: 'token ' + pat }
+          headers: { Authorization: 'token ' + gistPAT.value }
         });
         if (!res.ok) throw new Error('获取 Gist 列表失败');
         const gists = await res.json();
-        let gist = gists.find(g => g.files && g.files['totp_tokens.json']);
+        let gist = gists.find(g => g.files && g.files['totp_tokens_encrypted.txt']);
         let gistId;
         if (gist) {
           gistId = gist.id;
@@ -1501,128 +909,709 @@
           // 没有则新建
           const createRes = await fetch('https://api.github.com/gists', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: 'token ' + pat },
+            headers: { 'Content-Type': 'application/json', Authorization: 'token ' + gistPAT.value },
             body: JSON.stringify({
-              description: 'TOTP 令牌自动备份',
+              description: 'TOTP 令牌加密自动备份',
               public: false,
-              files: { 'totp_tokens.json': { content: JSON.stringify(tokens, null, 2) } }
+              files: { 'totp_tokens_encrypted.txt': { content: encrypted } }
             })
           });
           if (!createRes.ok) throw new Error('创建 Gist 失败');
           const data = await createRes.json();
           gistId = data.id;
         }
-        // 更新 gist，只更新 totp_tokens.json 文件内容
+        // 更新 gist，只更新 totp_tokens_encrypted.txt 文件内容
         const patchRes = await fetch('https://api.github.com/gists/' + gistId, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: 'token ' + pat },
+          headers: { 'Content-Type': 'application/json', Authorization: 'token ' + gistPAT.value },
           body: JSON.stringify({
-            files: { 'totp_tokens.json': { content: JSON.stringify(tokens, null, 2) } }
+            files: { 'totp_tokens_encrypted.txt': { content: encrypted } }
           })
         });
         if (!patchRes.ok) throw new Error('Gist 更新失败');
-        alert('Gist 备份成功！');
+        showToast('Gist 加密备份成功！', 'success');
+        showExportModal.value = false;
+        showGistModal.value = false;
       } catch (e) {
-        alert('Gist 备份失败：' + e.message);
+        showToast('Gist 备份失败：' + e.message, 'danger');
       }
     }
+    // Gist加密恢复
     async function restoreFromGist() {
-      const pat = await getGistPAT();
-      if (!pat) return;
+      if (!gistPAT.value) { showToast('请先配置PAT', 'danger'); return; }
       try {
         // 查找 gist
         const res = await fetch('https://api.github.com/gists', {
-          headers: { Authorization: 'token ' + pat }
+          headers: { Authorization: 'token ' + gistPAT.value }
         });
         if (!res.ok) throw new Error('获取 Gist 列表失败');
         const gists = await res.json();
-        const gist = gists.find(g => g.files && g.files['totp_tokens.json']);
-        if (!gist) throw new Error('未找到 totp_tokens.json Gist');
-        const rawUrl = gist.files['totp_tokens.json'].raw_url;
+        const gist = gists.find(g => g.files && g.files['totp_tokens_encrypted.txt']);
+        if (!gist) throw new Error('未找到 totp_tokens_encrypted.txt Gist');
+        const rawUrl = gist.files['totp_tokens_encrypted.txt'].raw_url;
         const fileRes = await fetch(rawUrl);
         if (!fileRes.ok) throw new Error('下载 Gist 文件失败');
-        const arr = await fileRes.json();
+        const encrypted = await fileRes.text();
+        const password = await getEncryptPassword(gistPAT.value);
+        if (!password) { showToast('已取消恢复', 'info'); return; }
+        const decrypted = decryptData(encrypted, password);
+        if (!decrypted) throw new Error('密码错误或文件损坏');
+        const arr = JSON.parse(decrypted);
         if (!Array.isArray(arr)) throw new Error('Gist 文件内容格式错误');
-        
-        // 恢复令牌数据
-        tokens = arr;
-        // 清除所有选择状态
-        selectedIds.clear();
-        // 保存到本地存储
-        saveTokens(tokens);
-        // 重新渲染界面
-        render();
-        alert('Gist 恢复成功！');
+        tokens.value = arr;
+        showToast('Gist 恢复成功！', 'success');
+        showExportModal.value = false;
+        showGistModal.value = false;
       } catch (e) {
-        alert('Gist 恢复失败：' + e.message);
+        showToast('Gist 恢复失败：' + e.message, 'danger');
       }
     }
 
-    // ========== WebDAV 备份/恢复 ==========
-    function getWebDAVConfig() {
-      let url = localStorage.getItem('webdav_url') || '';
-      let username = localStorage.getItem('webdav_username') || '';
-      let password = localStorage.getItem('webdav_password') || '';
-      let filename = localStorage.getItem('webdav_filename') || 'totp_tokens.json';
-      if (!url) url = prompt('请输入 WebDAV 服务器地址（如 https://dav.jianguoyun.com/dav/ ）');
-      if (!username) username = prompt('请输入 WebDAV 用户名');
-      if (!password) password = prompt('请输入 WebDAV 密码');
-      if (!filename) filename = prompt('请输入备份文件名', 'totp_tokens.json');
-      if (url && username && password && filename) {
-        localStorage.setItem('webdav_url', url);
-        localStorage.setItem('webdav_username', username);
-        localStorage.setItem('webdav_password', password);
-        localStorage.setItem('webdav_filename', filename);
-        return { url, username, password, filename };
-      }
-      alert('WebDAV 配置不完整');
-      return null;
+    // ========== 批量操作 ==========
+    function batchDelete() {
+      if (!selectedIds.value.length) { showToast('请先选择要删除的令牌', 'info'); return; }
+      if (!confirm(`确定要删除选中的${selectedIds.value.length}个令牌吗？`)) return;
+      const before = tokens.value.length;
+      tokens.value = tokens.value.filter(t => !selectedIds.value.includes(t.id));
+      selectedIds.value = [];
+      showToast(`已删除${before - tokens.value.length}个令牌`, 'success');
     }
-    async function backupToWebDAV() {
-      const config = getWebDAVConfig();
-      if (!config) return;
-      try {
-        const res = await fetch(config.url + config.filename, {
-          method: 'PUT',
-          headers: {
-            'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(tokens, null, 2)
-        });
-        if (!res.ok) throw new Error(await res.text());
-        alert('WebDAV 备份成功！');
-      } catch (e) {
-        alert('WebDAV 备份失败：' + e.message);
+    function batchExportJSON() {
+      if (!selectedIds.value.length) { showToast('请先选择要导出的令牌', 'info'); return; }
+      const arr = tokens.value.filter(t => selectedIds.value.includes(t.id));
+      const data = JSON.stringify(arr, null, 2);
+      const blob = new Blob([data], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'totp_tokens_selected.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('已导出JSON', 'success');
+    }
+
+    // 批量扫码导入弹窗和进度
+    const showScanModal = ref(false);
+    const scanProgress = reactive({ total: 0, success: 0, fail: 0, running: false });
+    function openScanModal() {
+      showScanModal.value = true;
+      scanProgress.total = 0;
+      scanProgress.success = 0;
+      scanProgress.fail = 0;
+      scanProgress.running = false;
+    }
+
+    // 修复：watch(showScanModal, ...) 必须在 setup 内部
+    watch(showScanModal, v => { if (!v) stopCamera(); });
+
+    // 提供showToast到组件内
+    provide('showToast', showToast);
+
+    // ========== 批量扫码导入弹窗拖拽与摄像头完善 ==========
+    function bindQrDropZone() {
+      const dropZone = document.getElementById('qrDropZone');
+      if (!dropZone) return;
+      dropZone.ondragover = e => { e.preventDefault(); dropZone.classList.add('bg-info', 'bg-opacity-10'); };
+      dropZone.ondragleave = e => { e.preventDefault(); dropZone.classList.remove('bg-info', 'bg-opacity-10'); };
+      dropZone.ondrop = e => {
+        e.preventDefault();
+        dropZone.classList.remove('bg-info', 'bg-opacity-10');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+          handleFiles(e.dataTransfer.files);
+        }
+      };
+      dropZone.onclick = () => {
+        const input = document.getElementById('qrImgInput');
+        if (input) input.click();
+      };
+    }
+    watch(showScanModal, v => { if (v) nextTick(bindQrDropZone); });
+
+    onMounted(() => {
+      nextTick(() => {
+        if (window.innerWidth <= 600) {
+          setTimeout(() => {
+
+          }, 100);
+        }
+      });
+    });
+    watch(filteredTokens, () => {
+      nextTick(() => {
+        if (window.innerWidth <= 600) {
+          setTimeout(() => {
+
+          }, 100);
+        }
+      });
+    });
+
+    function onCardTouchStart(token) {
+      if (isMultiSelectMode.value) return;
+      longPressTimer = setTimeout(() => {
+        isMultiSelectMode.value = true;
+        if (!selectedIds.value.includes(token.id)) {
+          selectedIds.value.push(token.id);
+        }
+      }, 500);
+    }
+    function onCardTouchEnd() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
       }
     }
-    async function restoreFromWebDAV() {
-      const config = getWebDAVConfig();
-      if (!config) return;
-      try {
-        const res = await fetch(config.url + config.filename, {
-          headers: {
-            'Authorization': 'Basic ' + btoa(config.username + ':' + config.password)
+    function onCardTouchCancel() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    }
+    function exitMultiSelectMode() {
+      isMultiSelectMode.value = false;
+      selectedIds.value = [];
+    }
+
+    const swipeStates = reactive({});
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchMoved = false;
+    function onCardSwipeStart(token, event) {
+      if (!isMobile.value) return;
+      touchMoved = false;
+      touchStartX = 0;
+      touchStartY = 0;
+      swipeStates[token.id] = swipeStates[token.id] || { offset: 0, deleting: false };
+      if (event.touches && event.touches.length === 1) {
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+      }
+    }
+    function onCardSwipeMove(token, event) {
+      if (!isMobile.value) return;
+      if (!event.touches || event.touches.length !== 1) return;
+      const dx = event.touches[0].clientX - touchStartX;
+      const dy = event.touches[0].clientY - touchStartY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+        touchMoved = true;
+        swipeStates[token.id].offset = dx;
+        event.preventDefault();
+      }
+    }
+    function onCardSwipeEnd(token) {
+      if (!isMobile.value) return;
+      const offset = swipeStates[token.id].offset;
+      if (touchMoved && offset < -140) {
+        // 左滑直接删除
+        deleteToken(token.id);
+        swipeStates[token.id].offset = 0;
+        swipeStates[token.id].deleting = false;
+      } else if (touchMoved && offset > 140) {
+        // 右滑进入编辑界面
+        openEditModal(token);
+        swipeStates[token.id].offset = 0;
+        swipeStates[token.id].deleting = false;
+      } else {
+        swipeStates[token.id].offset = 0;
+        swipeStates[token.id].deleting = false;
+      }
+      touchMoved = false;
+    }
+    function onCardSwipeCancel(token) {
+      if (!isMobile.value) return;
+      swipeStates[token.id].offset = 0;
+      swipeStates[token.id].deleting = false;
+      touchMoved = false;
+    }
+
+    // 本地加密导出
+    function batchExportEncryptedJSON() {
+      if (!selectedIds.value.length) { showToast('请先选择要导出的令牌', 'info'); return; }
+      const arr = tokens.value.filter(t => selectedIds.value.includes(t.id));
+      const data = JSON.stringify(arr, null, 2);
+      getEncryptPassword('totp_manager_default').then(password => {
+        if (!password) { showToast('已取消导出', 'info'); return; }
+        const encrypted = encryptData(data, password);
+        const blob = new Blob([encrypted], {type: 'text/plain'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'totp_tokens_encrypted.txt';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast('已导出加密文件', 'success');
+      });
+    }
+
+    // 统一导出/备份弹窗状态
+    const showExportModal = ref(false);
+    const exportType = ref('none'); // 'none' | 'custom'
+    const exportPassword = ref('');
+    const exportAction = ref(''); // 'gist-backup' | 'gist-restore' | 'gist' | 'local'
+
+    function openExportModal(action) {
+      exportType.value = 'none';
+      exportPassword.value = '';
+      exportAction.value = action; // 'gist-backup' | 'gist-restore' | 'gist' | 'local'
+      showExportModal.value = true;
+    }
+
+    async function confirmExport() {
+      let password = exportType.value === 'custom' ? exportPassword.value : null;
+      if (exportType.value === 'custom' && !password) {
+        showToast('请输入加密密码', 'danger');
+        return;
+      }
+      if (exportType.value === 'custom' && password.trim() === '') {
+        showToast('加密密码不能为空', 'danger');
+        return;
+      }
+      if (exportAction.value === 'local') {
+        // 本地导出
+        const arr = tokens.value.filter(t => selectedIds.value.includes(t.id));
+        let data = JSON.stringify(arr, null, 2);
+        if (password) {
+          data = encryptData(data, password);
+        }
+        const blob = new Blob([data], {type: 'text/plain'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = password ? 'totp_tokens_encrypted.txt' : 'totp_tokens.json';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast(password ? '已导出加密文件' : '已导出明文文件', 'success');
+        showExportModal.value = false;
+      } else if (exportAction.value === 'gist') {
+        // ...原 gist 备份逻辑（可删除或保留）...
+      } else if (exportAction.value === 'gist-backup') {
+        // Gist 加密备份
+        try {
+          const data = JSON.stringify(tokens.value, null, 2);
+          let content = data;
+          let filename = 'totp_tokens.json';
+          if (password) {
+            content = encryptData(data, password);
+            filename = 'totp_tokens_encrypted.txt';
           }
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const arr = await res.json();
-        if (!Array.isArray(arr)) throw new Error('WebDAV 文件内容格式错误');
-        
-        // 恢复令牌数据
-        tokens = arr;
-        // 清除所有选择状态
-        selectedIds.clear();
-        // 保存到本地存储
-        saveTokens(tokens);
-        // 重新渲染界面
-        render();
-        alert('WebDAV 恢复成功！');
-      } catch (e) {
-        alert('WebDAV 恢复失败：' + e.message);
+          const res = await fetch('https://api.github.com/gists', {
+            headers: { Authorization: 'token ' + gistPAT.value }
+          });
+          if (!res.ok) throw new Error('获取 Gist 列表失败');
+          const gists = await res.json();
+          let gist = gists.find(g => g.files && g.files[filename]);
+          let gistId;
+          if (gist) {
+            gistId = gist.id;
+          } else {
+            const createRes = await fetch('https://api.github.com/gists', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'token ' + gistPAT.value },
+              body: JSON.stringify({
+                description: password ? 'TOTP 令牌加密自动备份' : 'TOTP 令牌明文自动备份',
+                public: false,
+                files: { [filename]: { content } }
+              })
+            });
+            if (!createRes.ok) throw new Error('创建 Gist 失败');
+            const data = await createRes.json();
+            gistId = data.id;
+          }
+          const patchRes = await fetch('https://api.github.com/gists/' + gistId, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: 'token ' + gistPAT.value },
+            body: JSON.stringify({
+              files: { [filename]: { content } }
+            })
+          });
+          if (!patchRes.ok) throw new Error('Gist 更新失败');
+          showToast(password ? 'Gist 加密备份成功！' : 'Gist 明文备份成功！', 'success');
+          showExportModal.value = false;
+          showGistModal.value = false;
+        } catch (e) {
+          showToast('Gist 备份失败：' + e.message, 'danger');
+        }
+      } else if (exportAction.value === 'gist-restore') {
+        // Gist 加密恢复
+        try {
+          const res = await fetch('https://api.github.com/gists', {
+            headers: { Authorization: 'token ' + gistPAT.value }
+          });
+          if (!res.ok) throw new Error('获取 Gist 列表失败');
+          // 优先找加密文件
+          let gist = null;
+          let filename = '';
+          if (password) {
+            gist = (await res.json()).find(g => g.files && g.files['totp_tokens_encrypted.txt']);
+            filename = 'totp_tokens_encrypted.txt';
+          } else {
+            gist = (await res.json()).find(g => g.files && g.files['totp_tokens.json']);
+            filename = 'totp_tokens.json';
+          }
+          if (!gist) throw new Error('未找到对应 Gist 文件');
+          const rawUrl = gist.files[filename].raw_url;
+          const fileRes = await fetch(rawUrl);
+          if (!fileRes.ok) throw new Error('下载 Gist 文件失败');
+          let arr = null;
+          if (password) {
+            const encrypted = await fileRes.text();
+            const decrypted = decryptData(encrypted, password);
+            if (!decrypted) throw new Error('密码错误或文件损坏');
+            arr = JSON.parse(decrypted);
+          } else {
+            arr = await fileRes.json();
+          }
+          if (!Array.isArray(arr)) throw new Error('Gist 文件内容格式错误');
+          tokens.value = arr;
+          showToast('Gist 恢复成功！', 'success');
+          showExportModal.value = false;
+          showGistModal.value = false;
+        } catch (e) {
+          showToast('Gist 恢复失败：' + e.message, 'danger');
+        }
       }
     }
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    return {
+      tokens, selectedIds, allSelected, recentlyDeleted, toastList, search, remain, isMobile,
+      filteredTokens, selectAll, clearSelect, deleteToken, copyCode, totp, progressPercent,
+      showAddModal, showEditModal, addForm, editForm, editingToken,
+      openAddModal, addToken, openEditModal, saveEdit, closeEditModal,
+      showQRModal, qrToken, openQRModal,
+      showScanModal, scanProgress, openScanModal, handleFiles,
+      cameraActive, startCamera, stopCamera,
+      showGistModal, gistPAT, gistError, openGistModal, saveGistPAT, backupToGist, restoreFromGist,
+      batchDelete, batchExportJSON,
+      batchExportEncryptedJSON,
+      isMultiSelectMode,
+      onCardTouchStart,
+      onCardTouchEnd,
+      onCardTouchCancel,
+      exitMultiSelectMode,
+      swipeStates,
+      onCardSwipeStart,
+      onCardSwipeMove,
+      onCardSwipeEnd,
+      onCardSwipeCancel,
+      showExportModal,
+      exportType,
+      exportPassword,
+      exportAction,
+      openExportModal,
+      confirmExport,
+    };
+  },
+  template: `
+    <div class="container py-3">
+      <h2 class="mb-4"><i class="bi bi-shield-lock"></i> TOTP令牌管理器</h2>
+      <div class="search-box-sticky">
+        <input v-model="search" class="form-control flex-grow-1 me-1" :placeholder="(selectedIds.length ? '搜索...（已选' + selectedIds.length + '项）' : '搜索...')" style="min-width:0;">
+        <input type="checkbox" class="form-check-input me-1" v-model="allSelected" :title="'全选'" v-if="!isMobile || isMultiSelectMode">
+        <button class="btn btn-success btn-sm me-1" @click="openAddModal" title="新增"><i class="bi bi-plus"></i></button>
+        <template v-if="!isMobile">
+          <!-- PC端平铺 -->
+          <button class="btn btn-outline-info btn-sm me-1" @click="openScanModal"><i class="bi bi-qr-code-scan"></i></button>
+          <button class="btn btn-outline-dark btn-sm me-1" @click="showGistModal=true"><i class="bi bi-github"></i></button>
+          <button class="btn btn-outline-danger btn-sm me-1" @click="batchDelete"><i class="bi bi-trash"></i></button>
+          <button class="btn btn-outline-success btn-sm me-1" @click="openExportModal('local')"><i class="bi bi-download"></i></button>
+        </template>
+        <template v-else>
+          <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" title="更多">
+              <i class="bi bi-three-dots"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#" @click.prevent="openScanModal"><i class="bi bi-qr-code-scan"></i> 批量扫码导入</a></li>
+              <li><a class="dropdown-item" href="#" @click.prevent="showGistModal=true"><i class="bi bi-github"></i> Gist云备份</a></li>
+              <li><a class="dropdown-item" href="#" @click.prevent="batchDelete"><i class="bi bi-trash"></i> 批量删除</a></li>
+              <li><a class="dropdown-item" href="#" @click.prevent="openExportModal('local')"><i class="bi bi-download"></i> 批量导出JSON</a></li>
+            </ul>
+          </div>
+          <button v-if="isMultiSelectMode" class="btn btn-outline-secondary btn-sm ms-2" @click="exitMultiSelectMode"><i class="bi bi-x-circle"></i> 取消多选</button>
+        </template>
+      </div>
+      <div v-if="filteredTokens.length === 0" class="alert alert-warning">暂无令牌</div>
+      <div v-else>
+        <div v-for="token in filteredTokens" :key="token.id" class="card token-card" :id="'card-' + token.id" :data-id="token.id"
+          @touchstart="onCardTouchStart(token); onCardSwipeStart(token, $event)"
+          @touchmove="onCardSwipeMove(token, $event)"
+          @touchend="onCardTouchEnd(); onCardSwipeEnd(token)"
+          @touchcancel="onCardTouchCancel(); onCardSwipeCancel(token)"
+          :style="isMobile && swipeStates[token.id] && swipeStates[token.id].offset ? ('transform: translateX(' + swipeStates[token.id].offset + 'px); transition: 0.2s;') : ''">
+          <div class="card-body" v-if="isMobile">
+            <div class="token-info-row" style="position:relative;">
+              <input v-if="isMultiSelectMode" type="checkbox" class="form-check-input me-2 select-cbx" v-model="selectedIds" :value="token.id">
+              <span>{{token.userInfo || '未命名'}}<span v-if="!token.secret" class="badge bg-danger ms-2">无密钥</span></span>
+              <button
+                v-if="swipeStates[token.id] && swipeStates[token.id].deleting"
+                class="btn btn-danger btn-sm ms-2"
+                @click="deleteToken(token.id)"
+                style="position:absolute; right:10px; top:50%; transform:translateY(-50%); z-index:2;"
+              >删除</button>
+            </div>
+            <div class="token-code-row mt-2">
+              <span class="token-code" :data-copy="totp(token.secret, remain)" @click="copyCode(totp(token.secret, remain), $event)">{{totp(token.secret, remain)}}</span>
+              <canvas class="totp-pie" :id="'pie-' + token.id" width="28" height="28"></canvas>
+            </div>
+            <div class="d-flex mt-2 gap-2" v-if="!isMobile">
+              <button class="btn btn-outline-primary btn-sm flex-fill" @click="openEditModal(token)"><i class="bi bi-pencil"></i> 编辑</button>
+              <button class="btn btn-outline-danger btn-sm flex-fill" @click="deleteToken(token.id)"><i class="bi bi-trash"></i> 删除</button>
+              <button class="btn btn-outline-success btn-sm flex-fill" @click="openQRModal(token)"><i class="bi bi-qr-code"></i> 导出二维码</button>
+            </div>
+          </div>
+          <div class="card-body d-flex align-items-center gap-3" v-else>
+            <input type="checkbox" class="form-check-input me-2 select-cbx" v-model="selectedIds" :value="token.id">
+            <div class="token-info flex-grow-1" :title="token.userInfo">{{token.userInfo || '未命名'}}<span v-if="!token.secret" class="badge bg-danger ms-2">无密钥</span></div>
+            <span class="token-code" :data-copy="totp(token.secret, remain)" @click="copyCode(totp(token.secret, remain), $event)">{{totp(token.secret, remain)}}</span>
+            <div class="progress flex-grow-1 me-1" style="max-width:80px;">
+              <div class="progress-bar" :style="{width: progressPercent + '%'}"></div>
+            </div>
+            <span class="token-timer" style="min-width:36px;">{{remain}} 秒</span>
+            <div class="token-actions ms-2 flex-shrink-0 d-flex gap-1">
+              <button class="btn btn-outline-primary btn-sm" @click="openEditModal(token)"><i class="bi bi-pencil"></i> 编辑</button>
+              <button class="btn btn-outline-danger btn-sm" @click="deleteToken(token.id)"><i class="bi bi-trash"></i> 删除</button>
+              <button class="btn btn-outline-success btn-sm" @click="openQRModal(token)"><i class="bi bi-qr-code"></i> 导出二维码</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 新增弹窗 -->
+      <div class="modal fade" tabindex="-1" :class="{show:showAddModal}" style="display: block;" v-if="showAddModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">添加 TOTP 令牌</h5>
+              <button type="button" class="btn-close" @click="showAddModal=false"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">用户信息</label>
+                <input type="text" class="form-control" v-model="addForm.userInfo" placeholder="如：邮箱/账号/描述">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">密钥（Base32）</label>
+                <input type="text" class="form-control" v-model="addForm.secret" placeholder="如：JBSWY3DPEHPK3PXP">
+                <div class="form-text">请确保密钥为 Base32 格式</div>
+              </div>
+              <div class="error-message">{{addForm.error}}</div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="showAddModal=false">取消</button>
+              <button type="button" class="btn btn-primary" @click="addToken">添加</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 编辑弹窗 -->
+      <div class="modal fade" tabindex="-1" :class="{show:showEditModal}" style="display: block;" v-if="showEditModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">编辑 TOTP 令牌</h5>
+              <button type="button" class="btn-close" @click="closeEditModal"></button>
+            </div>
+            <form @submit.prevent="saveEdit">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">用户信息</label>
+                <input type="text" class="form-control" v-model="editForm.userInfo">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">密钥（Base32）</label>
+                <input type="text" class="form-control" v-model="editForm.secret">
+                <div class="form-text">请确保密钥为 Base32 格式</div>
+              </div>
+              <div class="error-message text-danger">{{editForm.error}}</div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="closeEditModal">取消</button>
+              <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <!-- 二维码导出弹窗 -->
+      <div class="modal fade" tabindex="-1" :class="{show:showQRModal}" style="display: block;" v-if="showQRModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">导出二维码</h5>
+              <button type="button" class="btn-close" @click="showQRModal=false"></button>
+            </div>
+            <div class="modal-body text-center">
+              <div id="qrcode"></div>
+              <div class="mt-3" style="font-size:1.1rem;font-weight:500;color:#333;word-break:break-all;">{{qrToken?.userInfo || '未命名'}}</div>
+              <div class="mt-2">可用 Google Authenticator 等扫码导入</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 批量扫码导入弹窗（图片） -->
+      <div class="modal fade" tabindex="-1" :class="{show:showScanModal}" style="display: block;" v-if="showScanModal">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">批量扫码导入 TOTP</h5>
+              <button type="button" class="btn-close" @click="showScanModal=false"></button>
+            </div>
+            <div class="modal-body">
+              <div id="qrDropZone" class="mb-3 p-4 border border-2 border-dashed rounded text-center" style="background:#f8f9fa;cursor:pointer;transition:background 0.2s;">
+                <div class="text-muted"><i class="bi bi-cloud-upload" style="font-size:2rem;"></i></div>
+                <div class="mt-2">拖拽图片文件到此处，或点击下方按钮选择</div>
+              </div>
+              <input type="file" accept=".png,.jpg,.jpeg,.bmp,.gif,.webp,.json,.csv,.txt,image/*" id="qrImgInput" class="form-control mb-2" multiple @change="e=>handleFiles(e.target.files)" style="display:none">
+              <div class="form-text mb-2">可选择/拖拽多种文件，支持二维码图片（PNG、JPG）、JSON、CSV、TXT（otpauth://URI）等格式</div>
+              <div class="text-center mb-3">
+                <video id="qrVideo" :style="{display: cameraActive ? '' : 'none', width: '100%', maxWidth: '300px'}" autoplay playsinline></video>
+                <div class="mt-2">
+                  <button class="btn btn-outline-secondary btn-sm me-2" v-if="!cameraActive" @click="startCamera"><i class="bi bi-camera-video"></i> 摄像头扫码</button>
+                  <button class="btn btn-outline-secondary btn-sm" v-if="cameraActive" @click="stopCamera"><i class="bi bi-x-circle"></i> 停止扫码</button>
+                </div>
+                <div v-if="cameraActive" class="mt-2 text-muted small">
+                  <i class="bi bi-search"></i> 正在扫描二维码...
+                </div>
+              </div>
+              <div class="progress mb-2" v-if="scanProgress.total">
+                <div class="progress-bar" role="progressbar" :style="{width: (scanProgress.success+scanProgress.fail)*100/scanProgress.total+'%'}"></div>
+              </div>
+              <div v-if="scanProgress.total" class="mb-2">
+                总文件数: {{scanProgress.total}}，成功: {{scanProgress.success}}，失败: {{scanProgress.fail}}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Gist配置弹窗 -->
+      <div class="modal fade" tabindex="-1" :class="{show:showGistModal}" style="display: block;" v-if="showGistModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">GitHub Gist 云操作</h5>
+              <button type="button" class="btn-close" @click="showGistModal=false"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-2">
+                <label class="form-label">GitHub PAT（gist权限）</label>
+                <input type="text" class="form-control" v-model="gistPAT" placeholder="ghp_xxx">
+                <div class="form-text">仅保存在本地浏览器，不上传服务器</div>
+                <div class="error-message">{{gistError}}</div>
+              </div>
+              <div class="alert alert-info mt-2" style="font-size:0.98rem;">
+                <i class="bi bi-shield-lock"></i> 支持加密备份和加密恢复，推荐自定义密码加密，遗失密码将无法恢复数据。
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="showGistModal=false">取消</button>
+              <button type="button" class="btn btn-primary" @click="saveGistPAT">保存PAT</button>
+              <button type="button" class="btn btn-success" @click="openExportModal('gist-backup')">
+                <i class="bi bi-cloud-upload"></i> 加密备份
+              </button>
+              <button type="button" class="btn btn-info" @click="openExportModal('gist-restore')">
+                <i class="bi bi-cloud-download"></i> 加密恢复
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 统一导出/备份弹窗 -->
+      <div class="modal fade" tabindex="-1" :class="{show:showExportModal}" style="display: block;" v-if="showExportModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                <template v-if="exportAction==='gist-backup'">Gist加密备份选项</template>
+                <template v-else-if="exportAction==='gist-restore'">Gist加密恢复选项</template>
+                <template v-else>本地导出选项</template>
+              </h5>
+              <button type="button" class="btn-close" @click="showExportModal=false"></button>
+            </div>
+            <div class="modal-body">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" id="exportNone" value="none" v-model="exportType">
+                <label class="form-check-label" for="exportNone">不加密（明文）</label>
+              </div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" id="exportCustom" value="custom" v-model="exportType">
+                <label class="form-check-label" for="exportCustom">自定义密码加密</label>
+              </div>
+              <div v-if="exportType==='custom'" class="mb-2">
+                <input type="password" class="form-control" v-model="exportPassword" placeholder="请输入加密密码">
+              </div>
+              <div class="form-text">
+                <template v-if="exportAction==='gist-backup'">
+                  请选择是否加密备份到Gist，推荐自定义密码加密，遗失密码将无法恢复数据！
+                </template>
+                <template v-else-if="exportAction==='gist-restore'">
+                  请选择是否用密码解密恢复Gist备份，若为明文备份可直接恢复。
+                </template>
+                <template v-else>
+                  如选择加密，请牢记密码，遗失将无法恢复数据！
+                </template>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="showExportModal=false">取消</button>
+              <button type="button" class="btn btn-primary" @click="confirmExport">确定</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+})。mount('#app');
+
+// 动态加载jsQR
+function loadJsQR() {
+  return new Promise((resolve, reject) => {
+    if (window.jsQR) return resolve(window.jsQR);
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    script.onload = () => resolve(window.jsQR);
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+}
+// 动态加载kjua
+function loadKjua() {
+  return new Promise((resolve, reject) => {
+    if (window.kjua) return resolve(window.kjua);
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/kjua@0.1.1/dist/kjua.min.js';
+    script.onload = () => resolve(window.kjua);
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+}
+
+// 在用到jsQR和kjua的地方分别await loadJsQR()和await loadKjua()
+// 例如：
+// await loadJsQR();
+// const code = jsQR(...);
+// await loadKjua();
+// const qr = kjua(...);
+
+// Bootstrap Icons建议用SVG inline方式替换
+
+// 1. 通用加密/解密函数
+function encryptData(data, password) {
+  return CryptoJS.AES.encrypt(data, password).toString();
+}
+function decryptData(text, password) {
+  return CryptoJS.AES.decrypt(text, password).toString(CryptoJS.enc.Utf8);
+}
+// 2. 通用文件读取函数
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}
+// 3. Toast复用（showToast, showUndoToast已较好，可保持）
+// 4. 在导出/导入/备份/恢复等相关地方用encryptData/decryptData/readFileAsText替换原有CryptoJS和FileReader调用
+
+</script>
 </body>
-</html> 
+</html>
