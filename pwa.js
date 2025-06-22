@@ -19,22 +19,22 @@ class PWAManager {
       
       // 检查浏览器是否支持Service Worker
       if ('serviceWorker' in navigator && isSecureContext && !window.isLocalFile) {
-        console.log('浏览器支持Service Worker 且环境安全');
         await this.registerServiceWorker();
         this.setupEventListeners();
         this.checkForUpdates();
+      } else if (window.isLocalFile) {
+        // 在本地文件环境中，仍然设置基本的事件监听器
+        this.setupBasicEventListeners();
       } else {
-        console.log('跳过Service Worker功能（环境不支持）');
+        this.setupBasicEventListeners();
       }
 
       // 检查是否支持PWA安装
       if ('BeforeInstallPromptEvent' in window && manifestAvailable && !window.isLocalFile) {
         this.setupInstallPrompt();
-      } else {
-        console.log('跳过PWA安装功能（manifest不可用或浏览器不支持）');
       }
     } catch (error) {
-      console.log('PWA初始化完成（部分功能可能不可用）:', error.message);
+      console.error('PWA初始化失败:', error);
     }
   }
 
@@ -44,16 +44,12 @@ class PWAManager {
         scope: './'
       });
 
-      console.log('Service Worker 注册成功:', this.swRegistration);
-
       // 监听Service Worker更新
       this.swRegistration.addEventListener('updatefound', () => {
         const newWorker = this.swRegistration.installing;
-        console.log('Service Worker 更新中...');
 
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('新版本可用');
             this.showUpdateNotification();
           }
         });
@@ -61,13 +57,21 @@ class PWAManager {
 
       // 监听Service Worker控制权变化
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('Service Worker 控制权已转移');
         this.showToast('应用已更新到最新版本', 'success');
       });
 
+      // 检查Service Worker是否已经激活
+      if (this.swRegistration.active) {
+        this.setupCacheCleanup();
+      } else {
+        // 等待Service Worker激活
+        this.swRegistration.addEventListener('activate', () => {
+          this.setupCacheCleanup();
+        });
+      }
+
     } catch (error) {
-      // 只在控制台记录错误，不显示用户提示
-      console.log('Service Worker 注册失败（可能是本地文件环境）:', error.message);
+      console.error('Service Worker 注册失败:', error);
     }
   }
 
@@ -94,10 +98,29 @@ class PWAManager {
       }
     });
 
-    // 定期清理过期缓存（每天一次）- 只在有Service Worker时执行
-    if (this.swRegistration) {
+    // 监听Service Worker控制权变化，确保在激活后再设置缓存清理
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      this.showToast('应用已更新到最新版本', 'success');
+      // 在控制权转移后设置缓存清理
+      this.setupCacheCleanup();
+    });
+
+    // 如果Service Worker已经激活，立即设置缓存清理
+    if (this.swRegistration && this.swRegistration.active) {
       this.setupCacheCleanup();
     }
+  }
+
+  // 基本事件监听器，用于本地文件环境
+  setupBasicEventListeners() {
+    // 监听网络状态变化（基本功能）
+    window.addEventListener('online', () => {
+      this.isOnline = true;
+    });
+
+    window.addEventListener('offline', () => {
+      this.isOnline = false;
+    });
   }
 
   setupCacheCleanup() {
@@ -115,10 +138,12 @@ class PWAManager {
   async cleanupCache() {
     if (this.swRegistration && 'serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
       try {
-        await this.swRegistration.sync.register('cache-cleanup');
-        console.log('缓存清理任务已注册');
+        // 确保Service Worker已经激活
+        if (this.swRegistration.active) {
+          await this.swRegistration.sync.register('cache-cleanup');
+        }
       } catch (error) {
-        console.log('缓存清理任务注册失败:', error.message);
+        console.error('缓存清理任务注册失败:', error);
       }
     }
   }
@@ -136,7 +161,6 @@ class PWAManager {
 
     // 监听应用安装完成
     window.addEventListener('appinstalled', () => {
-      console.log('应用已安装');
       this.showToast('应用已成功安装到桌面', 'success');
       deferredPrompt = null;
     });
@@ -152,7 +176,6 @@ class PWAManager {
       if (deferredPrompt) {
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
-        console.log('用户选择:', outcome);
         deferredPrompt = null;
       }
       installButton.remove();
@@ -201,7 +224,7 @@ class PWAManager {
       try {
         await this.swRegistration.update();
       } catch (error) {
-        console.log('检查更新失败:', error.message);
+        console.error('检查更新失败:', error);
       }
     }
   }
@@ -210,9 +233,8 @@ class PWAManager {
     if (this.swRegistration && 'serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
       try {
         await this.swRegistration.sync.register('background-sync');
-        console.log('后台同步已注册');
       } catch (error) {
-        console.log('后台同步注册失败:', error.message);
+        console.error('后台同步注册失败:', error);
       }
     }
   }
@@ -220,8 +242,6 @@ class PWAManager {
   showToast(message, type = 'info') {
     if (window.showToast) {
       window.showToast(message, type);
-    } else {
-      console.log(`[${type.toUpperCase()}] ${message}`);
     }
   }
 
@@ -239,7 +259,6 @@ class PWAManager {
   async requestNotificationPermission() {
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
-      console.log('通知权限:', permission);
       return permission;
     }
     return 'denied';

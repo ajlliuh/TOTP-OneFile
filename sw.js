@@ -35,40 +35,42 @@ const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000;
 
 // 安装事件 - 缓存静态资源
 self.addEventListener('install', event => {
-  console.log('Service Worker 安装中...');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(cache => {
-        console.log('缓存静态资源...');
         return cache.addAll(STATIC_ASSETS);
       })
       .then(() => {
-        console.log('静态资源缓存完成');
         return self.skipWaiting();
       })
       .catch(error => {
         console.error('缓存静态资源失败:', error);
+        // 即使缓存失败也要继续安装
+        return self.skipWaiting();
       })
   );
 });
 
 // 激活事件 - 清理旧缓存
 self.addEventListener('activate', event => {
-  console.log('Service Worker 激活中...');
   event.waitUntil(
     caches.keys()
       .then(cacheNames => {
         return Promise.all(
           cacheNames.map(cacheName => {
             if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE && cacheName !== CDN_CACHE) {
-              console.log('删除旧缓存:', cacheName);
               return caches.delete(cacheName);
             }
+            return Promise.resolve(); // 确保返回Promise
           })
         );
       })
       .then(() => {
-        console.log('Service Worker 激活完成');
+        return self.clients.claim();
+      })
+      .catch(error => {
+        console.error('Service Worker 激活失败:', error);
+        // 即使清理失败也要继续激活
         return self.clients.claim();
       })
   );
@@ -89,47 +91,65 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // 在本地文件环境中，跳过CDN资源的处理
+  if (self.location.protocol === 'file:' && CDN_ASSETS.includes(request.url)) {
+    return;
+  }
+
   event.respondWith(
-    // 对于CDN资源，使用智能缓存策略
-    CDN_ASSETS.includes(request.url) ? 
-      handleCDNRequest(request)
-    :
-    // 对于静态资源，优先从缓存获取
-    caches.match(request)
-      .then(response => {
-        // 如果缓存中有响应，返回缓存的响应
-        if (response) {
-          return response;
+    (async () => {
+      try {
+        // 对于CDN资源，使用智能缓存策略
+        if (CDN_ASSETS.includes(request.url)) {
+          const response = await handleCDNRequest(request);
+          if (response) {
+            return response;
+          } else {
+            // CDN处理失败，让页面使用本地fallback
+            return new Response('CDN Unavailable', { status: 404 });
+          }
+        }
+
+        // 对于静态资源，优先从缓存获取
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+          return cachedResponse;
         }
 
         // 对于其他请求，尝试网络请求
-        return fetch(request)
-          .then(response => {
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
             // 只缓存成功的响应
-            if (response.ok && response.status === 200) {
-              const responseClone = response.clone();
-              caches.open(DYNAMIC_CACHE)
-                .then(cache => cache.put(request, responseClone));
-            }
-            return response;
-          })
-          .catch(error => {
-            console.error('网络请求失败:', error);
-            
-            // 对于HTML请求，返回缓存的index.html
-            if (request.headers.get('accept').includes('text/html')) {
-              return caches.match('index.html');
-            }
-            
-            // 对于其他请求，返回null
-            return null;
-          });
-      })
+            const cache = await caches.open(STATIC_CACHE);
+            await cache.put(request, response.clone());
+          }
+          return response;
+        } catch (fetchError) {
+          // 网络请求失败，返回错误响应
+          return new Response('Network Error', { status: 503 });
+        }
+      } catch (error) {
+        console.error('Service Worker处理请求失败:', request.url, error);
+        // 发生异常，尝试直接网络请求
+        try {
+          return await fetch(request);
+        } catch (fetchError) {
+          console.error('最终网络请求也失败:', request.url, fetchError);
+          return new Response('Service Worker Error', { status: 500 });
+        }
+      }
+    })()
   );
 });
 
 // 处理CDN请求的智能缓存策略
 async function handleCDNRequest(request) {
+  // 检查是否在本地文件环境中
+  if (self.location.protocol === 'file:') {
+    return null; // 让页面使用本地fallback
+  }
+  
   try {
     // 首先尝试从网络获取最新版本
     const networkResponse = await fetch(request);
@@ -150,41 +170,44 @@ async function handleCDNRequest(request) {
       });
       
       await cache.put(request, cachedResponse);
-      console.log('CDN资源已更新:', request.url);
       return networkResponse;
+    } else {
+      // 网络请求失败，尝试从缓存获取
+      const cache = await caches.open(CDN_CACHE);
+      const cachedResponse = await cache.match(request);
+      
+      if (cachedResponse) {
+        return cachedResponse;
+      } else {
+        // 缓存也没有，返回null让页面使用本地fallback
+        return null;
+      }
     }
   } catch (error) {
-    console.log('CDN网络请求失败，尝试使用缓存:', request.url);
-  }
-  
-  // 网络请求失败，尝试从缓存获取
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    // 检查缓存是否过期
-    const cacheTime = cachedResponse.headers.get('sw-cache-time');
-    if (cacheTime && (Date.now() - parseInt(cacheTime)) < CACHE_EXPIRY) {
-      console.log('使用有效的CDN缓存:', request.url);
-      return cachedResponse;
-    } else {
-      console.log('CDN缓存已过期:', request.url);
-      // 删除过期缓存
+    // 网络异常，尝试从缓存获取
+    try {
       const cache = await caches.open(CDN_CACHE);
-      await cache.delete(request);
+      const cachedResponse = await cache.match(request);
+      
+      if (cachedResponse) {
+        return cachedResponse;
+      } else {
+        // 缓存也没有，静默失败，让页面使用本地fallback
+        return null;
+      }
+    } catch (cacheError) {
+      console.error('缓存访问失败:', cacheError);
+      return null;
     }
   }
-  
-  // 没有有效缓存，返回null让页面使用本地fallback
-  return null;
 }
 
 // 后台同步 - 用于数据同步
 self.addEventListener('sync', event => {
-  console.log('后台同步事件:', event.tag);
-  
   if (event.tag === 'background-sync') {
     event.waitUntil(
       // 这里可以添加数据同步逻辑
-      console.log('执行后台同步...')
+      Promise.resolve()
     );
   }
   
@@ -197,8 +220,6 @@ self.addEventListener('sync', event => {
 
 // 清理过期缓存
 async function cleanupExpiredCache() {
-  console.log('开始清理过期缓存...');
-  
   try {
     const cache = await caches.open(CDN_CACHE);
     const requests = await cache.keys();
@@ -209,12 +230,9 @@ async function cleanupExpiredCache() {
         const cacheTime = response.headers.get('sw-cache-time');
         if (cacheTime && (Date.now() - parseInt(cacheTime)) >= CACHE_EXPIRY) {
           await cache.delete(request);
-          console.log('删除过期缓存:', request.url);
         }
       }
     }
-    
-    console.log('缓存清理完成');
   } catch (error) {
     console.error('缓存清理失败:', error);
   }
@@ -222,8 +240,6 @@ async function cleanupExpiredCache() {
 
 // 推送通知
 self.addEventListener('push', event => {
-  console.log('收到推送通知');
-  
   const options = {
     body: event.data ? event.data.text() : 'TOTP令牌管理器通知',
     icon: 'icons/icon.svg',
@@ -254,8 +270,6 @@ self.addEventListener('push', event => {
 
 // 通知点击事件
 self.addEventListener('notificationclick', event => {
-  console.log('通知被点击:', event.action);
-  
   event.notification.close();
 
   if (event.action === 'explore') {
@@ -272,4 +286,6 @@ self.addEventListener('error', event => {
 
 self.addEventListener('unhandledrejection', event => {
   console.error('Service Worker 未处理的Promise拒绝:', event.reason);
+  // 防止Promise拒绝导致Service Worker崩溃
+  event.preventDefault();
 }); 

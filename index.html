@@ -22,9 +22,38 @@
     // 检测是否在本地文件环境中
     window.isLocalFile = window.location.protocol === 'file:';
     
+    // 检测是否在Cloudflare Pages环境中
+    window.isCloudflarePages = window.location.hostname.includes('pages.dev') || 
+                               window.location.hostname.includes('cloudflare.com');
+    
     // 如果是在本地文件环境中，设置一些兼容性标记
     if (window.isLocalFile) {
-      console.log('检测到本地文件环境，将跳过部分PWA功能');
+      // 在本地文件环境中，确保使用本地资源
+      document.addEventListener('DOMContentLoaded', function() {
+        // 延迟检查，确保CDN资源有足够时间加载
+        setTimeout(function() {
+          // 检查Vue是否加载成功
+          if (typeof Vue === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'libs/vue.global.prod.js';
+            document.body.appendChild(script);
+          }
+          
+          // 检查Bootstrap是否加载成功
+          if (typeof bootstrap === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'libs/bootstrap.bundle.min.js';
+            document.body.appendChild(script);
+          }
+          
+          // 检查CryptoJS是否加载成功
+          if (typeof CryptoJS === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'libs/crypto-js.min.js';
+            document.body.appendChild(script);
+          }
+        }, 3000); // 3秒后检查
+      });
     } else {
       // 只有在非本地文件环境中才加载manifest
       const manifestLink = document.createElement('link');
@@ -32,7 +61,6 @@
       manifestLink.href = 'manifest.json';
       manifestLink.onerror = function() {
         this.setAttribute('data-error', 'true');
-        console.log('Manifest加载失败，跳过PWA功能');
       };
       document.head.appendChild(manifestLink);
     }
@@ -555,7 +583,6 @@ createApp({
     // 优化的自动保存
     const debouncedSave = debounce((val) => {
       localStorage.setItem('totp_tokens', JSON.stringify(val));
-      console.log('数据已自动保存');
       
       // 触发智能备份
       smartBackup();
@@ -1027,12 +1054,6 @@ function copyCode(code, event) {
           // 解析用户信息
           let userInfo = decodeURIComponent(url.pathname.slice(1));
           
-          console.log('解析过程:', {
-            pathname: url.pathname,
-            userInfo: userInfo,
-            issuer: issuer
-          });
-          
           // 通用处理逻辑：提取真正的用户标识符
           let finalUserInfo = userInfo;
           
@@ -1074,15 +1095,6 @@ function copyCode(code, event) {
           }
           
           // 调试信息
-          console.log('解析 otpauth URI:', {
-            original: data,
-            decoded: decodedData,
-            finalUserInfo: finalUserInfo,
-            secret: secret,
-            issuer: issuer,
-            secretValid: secret && base32ToBytes(secret)
-          });
-          
           return validateAndAddToken(finalUserInfo, secret);
         } catch (e) {
           showToast(`无效的 otpauth URI 格式: ${e.message}`, 'danger');
@@ -1315,26 +1327,17 @@ function copyCode(code, event) {
       let skipped = 0;
       let invalid = 0;
       
-      console.log(`${sourceName}开始，总行数:`, lines.length);
-      console.log(`${sourceName}内容:`, lines);
-      
       lines.forEach((line, index) => {
-        console.log(`处理第${index + 1}行:`, line);
         if (line.startsWith('otpauth://totp/')) {
           if (handleQrData(line)) {
             count++;
-            console.log(`第${index + 1}行导入成功`);
           } else {
             skipped++;
-            console.log(`第${index + 1}行跳过或失败`);
           }
         } else {
           invalid++;
-          console.log(`第${index + 1}行不是有效的otpauth URI`);
         }
       });
-      
-      console.log(`${sourceName}结果:`, { count, skipped, invalid });
       
       if (count > 0) {
         showToast(`${sourceName}成功：新增${count}个令牌${skipped > 0 ? `，跳过${skipped}个` : ''}`, 'success');
@@ -1751,7 +1754,6 @@ function copyCode(code, event) {
       localStorage.setItem('backup_history', JSON.stringify(backupHistory.value));
       localStorage.setItem('last_backup_time', Date.now().toString());
       
-      console.log(`备份已创建: ${reason}, 令牌数量: ${backup.tokenCount}`);
       return backup;
     }
     
@@ -2492,49 +2494,55 @@ waitForVue();
 function loadJsQR() {
   return new Promise((resolve, reject) => {
     if (window.jsQR) return resolve(window.jsQR);
+    
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
-    script.onload = () => resolve(window.jsQR);
+    script.onload = () => {
+      resolve(window.jsQR);
+    };
     script.onerror = () => {
       // CDN失败，尝试加载本地文件
       const localScript = document.createElement('script');
       localScript.src = 'libs/jsQR.js';
-      localScript.onload = () => resolve(window.jsQR);
-      localScript.onerror = () => reject(new Error('jsQR库加载失败'));
+      localScript.onload = () => {
+        resolve(window.jsQR);
+      };
+      localScript.onerror = () => {
+        console.error('jsQR库加载失败');
+        reject(new Error('jsQR库加载失败'));
+      };
       document.body.appendChild(localScript);
     };
     document.body.appendChild(script);
   });
 }
+
 // 动态加载kjua
 function loadKjua() {
   return new Promise((resolve, reject) => {
     if (window.kjua) return resolve(window.kjua);
+    
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/kjua@0.1.1/dist/kjua.min.js';
-    script.onload = () => resolve(window.kjua);
+    script.onload = () => {
+      resolve(window.kjua);
+    };
     script.onerror = () => {
       // CDN失败，尝试加载本地文件
       const localScript = document.createElement('script');
       localScript.src = 'libs/kjua.min.js';
-      localScript.onload = () => resolve(window.kjua);
-      localScript.onerror = () => reject(new Error('kjua库加载失败'));
+      localScript.onload = () => {
+        resolve(window.kjua);
+      };
+      localScript.onerror = () => {
+        console.error('kjua库加载失败');
+        reject(new Error('kjua库加载失败'));
+      };
       document.body.appendChild(localScript);
     };
     document.body.appendChild(script);
   });
 }
-
-// 在用到jsQR和kjua的地方分别await loadJsQR()和await loadKjua()
-// 例如：
-// await loadJsQR();
-// const code = jsQR(...);
-// await loadKjua();
-// const qr = kjua(...);
-
-// Bootstrap Icons建议用SVG inline方式替换
-
-
 
 // 全局错误处理
 function handleError(error, context = '操作') {
