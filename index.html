@@ -350,21 +350,17 @@
 <div id="app"></div>
 <div id="toastArea"></div>
 
-<!-- Vue 3 CDN + 降级 -->
-<script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"
-        onerror="this.onerror=null;this.src='libs/vue.global.prod.js'"></script>
+<!-- Vue 3 本地优先 + CDN兜底 -->
+<script src="libs/vue.global.prod.js" defer onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js'"></script>
 
-<!-- Bootstrap 5 CSS CDN + 降级 -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-      onerror="this.onerror=null;this.href='libs/bootstrap.min.css'">
+<!-- Bootstrap 5 CSS 本地优先 + CDN兜底 -->
+<link rel="stylesheet" href="libs/bootstrap.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css'">
 
-<!-- Bootstrap 5 JS CDN + 降级 -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-        onerror="this.onerror=null;this.src='libs/bootstrap.bundle.min.js'"></script>
+<!-- Bootstrap 5 JS 本地优先 + CDN兜底 -->
+<script src="libs/bootstrap.bundle.min.js" defer onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js'"></script>
 
-<!-- CryptoJS CDN + 降级 -->
-<script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"
-        onerror="this.onerror=null;this.src='libs/crypto-js.min.js'"></script>
+<!-- CryptoJS 本地优先 + CDN兜底 -->
+<script src="libs/crypto-js.min.js" defer onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js'"></script>
 
     <script>
 // 删除重复的CSS动态加载，因为已经有静态link标签了
@@ -442,78 +438,131 @@ function showUndoToast(msg, onUndo, delay = 4000) {
 }
 
 const uuidv4 = () => (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).slice(2, 10) + Date.now());
-// 等待Vue加载完成后再执行
-function waitForVue() {
-  if (typeof Vue !== 'undefined') {
+// 等待DOM加载完成后再执行Vue应用
+document.addEventListener('DOMContentLoaded', () => {
     const { createApp, ref, reactive, computed, onMounted, watch, nextTick, provide } = Vue;
 
 // TOTP算法实现（兼容原生JS版）
+    // 添加缓存机制提高性能
+    const base32Cache = new Map();
+    const hotpCache = new Map();
+    
+    // 添加时间戳验证
+    function getCurrentCounter() {
+      const period = 30;
+      return Math.floor(Date.now() / 1000 / period);
+    }
+    
     function base32ToBytes(base32) {
+      // 使用缓存避免重复计算
+      if (base32Cache.has(base32)) {
+        return base32Cache.get(base32);
+      }
+      
       const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
       let clean = base32.replace(/\s+/g, '').toUpperCase();
-  while (clean.endsWith('=')) clean = clean.slice(0, -1);
-  let buffer = 0, bitsLeft = 0, bytes = [];
+      while (clean.endsWith('=')) clean = clean.slice(0, -1);
+      let buffer = 0, bitsLeft = 0, bytes = [];
       for (let i = 0; i < clean.length; i++) {
         const val = alphabet.indexOf(clean[i]);
-    if (val === -1) return null;
+        if (val === -1) return null;
         buffer = (buffer << 5) | val;
         bitsLeft += 5;
         while (bitsLeft >= 8) {
           bitsLeft -= 8;
-      bytes.push((buffer >>> bitsLeft) & 0xff);
+          bytes.push((buffer >>> bitsLeft) & 0xff);
+        }
+      }
+      if (bitsLeft > 0) bytes.push((buffer << (8 - bitsLeft)) & 0xff);
+      const result = new Uint8Array(bytes);
+      
+      // 缓存结果（限制缓存大小）
+      if (base32Cache.size < 100) {
+        base32Cache.set(base32, result);
+      }
+      
+      return result;
     }
-  }
-  if (bitsLeft > 0) bytes.push((buffer << (8 - bitsLeft)) & 0xff);
-      return new Uint8Array(bytes);
-    }
+    
     function leftPad(str, len, pad) {
       str = String(str);
       while (str.length < len) str = pad + str;
       return str;
     }
-function hotp(secretBytes, counter) {
-  // 兼容uuidv4和window.Crypto
-  const key = secretBytes;
-  const counterBytes = new Uint8Array(8);
-  let tmp = counter;
-  for (let i = 7; i >= 0; --i) {
-    counterBytes[i] = tmp & 0xff;
-    tmp = tmp >> 8;
-  }
-  // HMAC-SHA1
-  const crypto = window.crypto || window.msCrypto;
-  if (!crypto || !crypto.subtle) return '无效密钥';
-  // 这里用同步polyfill（兼容性更好）
-  // 直接用jsSHA1实现
-  // 由于CDN限制，这里用window.CryptoJS（如有）
-  if (window.CryptoJS) {
-    const u8ToWordArray = (u8arr) => {
-      var words = [], i = 0, len = u8arr.length;
-      for (; i < len; i += 4) {
-        var word = 0;
-        if (i < len) word |= (u8arr[i] & 0xff) << 24;
-        if (i + 1 < len) word |= (u8arr[i + 1] & 0xff) << 16;
-        if (i + 2 < len) word |= (u8arr[i + 2] & 0xff) << 8;
-        if (i + 3 < len) word |= (u8arr[i + 3] & 0xff);
-        words.push(word);
+    
+    function hotp(secretBytes, counter) {
+      // 创建缓存键
+      const cacheKey = `${secretBytes.join(',')}-${counter}`;
+      
+      // 验证缓存是否过期（检查counter是否过时）
+      const currentCounter = getCurrentCounter();
+      if (Math.abs(counter - currentCounter) > 1) {
+        // 如果counter差距超过1个周期，清除相关缓存
+        const keysToDelete = [];
+        for (const [key, value] of hotpCache.entries()) {
+          if (key.includes(secretBytes.join(','))) {
+            keysToDelete.push(key);
+          }
+        }
+        keysToDelete.forEach(key => hotpCache.delete(key));
       }
-      return window.CryptoJS.lib.WordArray.create(words, len);
-    };
-    const keyWord = u8ToWordArray(key);
-      const counterWord = u8ToWordArray(counterBytes);
-    const hmac = window.CryptoJS.HmacSHA1(counterWord, keyWord);
-    const hmacHex = hmac.toString(window.CryptoJS.enc.Hex);
-      const hmacBytes = [];
-    for (let i = 0; i < hmacHex.length; i += 2) hmacBytes.push(parseInt(hmacHex.substr(i, 2), 16));
-    const offset = hmacBytes[hmacBytes.length - 1] & 0xf;
-    const binCode = ((hmacBytes[offset] & 0x7f) << 24) |
-      ((hmacBytes[offset + 1] & 0xff) << 16) |
-      ((hmacBytes[offset + 2] & 0xff) << 8) |
-      (hmacBytes[offset + 3] & 0xff);
-      return leftPad(binCode % 1000000, 6, '0');
-  }
-  return '无效密钥';
+      
+      if (hotpCache.has(cacheKey)) {
+        return hotpCache.get(cacheKey);
+      }
+      
+      // 兼容uuidv4和window.Crypto
+      const key = secretBytes;
+      const counterBytes = new Uint8Array(8);
+      let tmp = counter;
+      for (let i = 7; i >= 0; --i) {
+        counterBytes[i] = tmp & 0xff;
+        tmp = tmp >> 8;
+      }
+      
+      // HMAC-SHA1
+      const crypto = window.crypto || window.msCrypto;
+      if (!crypto || !crypto.subtle) return '无效密钥';
+      
+      // 这里用同步polyfill（兼容性更好）
+      // 直接用jsSHA1实现
+      // 由于CDN限制，这里用window.CryptoJS（如有）
+      if (window.CryptoJS) {
+        const u8ToWordArray = (u8arr) => {
+          var words = [], i = 0, len = u8arr.length;
+          for (; i < len; i += 4) {
+            var word = 0;
+            if (i < len) word |= (u8arr[i] & 0xff) << 24;
+            if (i + 1 < len) word |= (u8arr[i + 1] & 0xff) << 16;
+            if (i + 2 < len) word |= (u8arr[i + 2] & 0xff) << 8;
+            if (i + 3 < len) word |= (u8arr[i + 3] & 0xff);
+            words.push(word);
+          }
+          return window.CryptoJS.lib.WordArray.create(words, len);
+        };
+        const keyWord = u8ToWordArray(key);
+        const counterWord = u8ToWordArray(counterBytes);
+        const hmac = window.CryptoJS.HmacSHA1(counterWord, keyWord);
+        const hmacHex = hmac.toString(window.CryptoJS.enc.Hex);
+        const hmacBytes = [];
+        for (let i = 0; i < hmacHex.length; i += 2) hmacBytes.push(parseInt(hmacHex.substr(i, 2), 16));
+        const offset = hmacBytes[hmacBytes.length - 1] & 0xf;
+        const binCode = ((hmacBytes[offset] & 0x7f) << 24) |
+          ((hmacBytes[offset + 1] & 0xff) << 16) |
+          ((hmacBytes[offset + 2] & 0xff) << 8) |
+          (hmacBytes[offset + 3] & 0xff);
+        const result = leftPad(binCode % 1000000, 6, '0');
+        
+        // 缓存结果（限制缓存大小）
+        if (hotpCache.size < 50) {
+          hotpCache.set(cacheKey, result);
+        }
+        
+        return result;
+      }
+      return '无效密钥';
     }
+    
     function totp(secret, remainTick) {
       const bytes = base32ToBytes(secret);
       if (!bytes) return '无效密钥';
@@ -521,6 +570,41 @@ function hotp(secretBytes, counter) {
       const counter = Math.floor(Date.now() / 1000 / period);
       return hotp(bytes, counter);
     }
+    
+    // 智能缓存清理（每30秒清理一次，与TOTP周期同步）
+    setInterval(() => {
+      const currentCounter = getCurrentCounter();
+      
+      // 清理过期的HOTP缓存
+      const keysToDelete = [];
+      for (const [key, value] of hotpCache.entries()) {
+        const keyParts = key.split('-');
+        if (keyParts.length === 2) {
+          const cachedCounter = parseInt(keyParts[1]);
+          // 如果缓存的counter比当前counter小2个周期以上，则删除
+          if (currentCounter - cachedCounter > 1) {
+            keysToDelete.push(key);
+          }
+        }
+      }
+      keysToDelete.forEach(key => hotpCache.delete(key));
+      
+      // 清理Base32缓存（保持原有逻辑）
+      if (base32Cache.size > 50) {
+        const keys = Array.from(base32Cache.keys());
+        for (let i = 0; i < keys.length / 2; i++) {
+          base32Cache.delete(keys[i]);
+        }
+      }
+      
+      // 如果HOTP缓存仍然过大，清理一半
+      if (hotpCache.size > 25) {
+        const keys = Array.from(hotpCache.keys());
+        for (let i = 0; i < keys.length / 2; i++) {
+          hotpCache.delete(keys[i]);
+        }
+      }
+    }, 30 * 1000); // 改为30秒，与TOTP周期同步
 
 createApp({
   setup() {
@@ -2481,15 +2565,8 @@ function copyCode(code, event) {
     </div>
   `,
 }).mount('#app');
+});
 
-} else {
-    // Vue还未加载完成，继续等待
-    setTimeout(waitForVue, 10);
-  }
-}
-
-// 开始等待Vue加载
-waitForVue();
 // 动态加载jsQR
 function loadJsQR() {
   return new Promise((resolve, reject) => {
@@ -2549,24 +2626,6 @@ function handleError(error, context = '操作') {
   console.error(`${context}错误:`, error);
   showToast(`${context}失败: ${error.message || '未知错误'}`, 'danger');
 }
-
-setTimeout(() => {
-  if (typeof Vue === 'undefined') {
-    const vueScript = document.createElement('script');
-    vueScript.src = 'libs/vue.global.prod.js';
-    document.body.appendChild(vueScript);
-  }
-  if (typeof bootstrap === 'undefined') {
-    const bootstrapScript = document.createElement('script');
-    bootstrapScript.src = 'libs/bootstrap.bundle.min.js';
-    document.body.appendChild(bootstrapScript);
-  }
-  if (typeof CryptoJS === 'undefined') {
-    const cryptoScript = document.createElement('script');
-    cryptoScript.src = 'libs/crypto-js.min.js';
-    document.body.appendChild(cryptoScript);
-  }
-}, 2000);
 
 </script>
 
