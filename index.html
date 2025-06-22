@@ -10921,9 +10921,7 @@ function showUndoToast(msg, onUndo, delay = 4000) {
 }
 
 const uuidv4 = () => (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).slice(2, 10) + Date.now());
-// 等待Vue加载完成后再执行
-function waitForVue() {
-  if (typeof Vue !== 'undefined') {
+function initApp() {
     const { createApp, ref, reactive, computed, onMounted, watch, nextTick, provide } = Vue;
 
 // TOTP算法实现（兼容原生JS版）
@@ -10951,7 +10949,6 @@ function waitForVue() {
       return str;
     }
 function hotp(secretBytes, counter) {
-  // 兼容uuidv4和window.Crypto
   const key = secretBytes;
   const counterBytes = new Uint8Array(8);
   let tmp = counter;
@@ -10962,9 +10959,6 @@ function hotp(secretBytes, counter) {
   // HMAC-SHA1
   const crypto = window.crypto || window.msCrypto;
   if (!crypto || !crypto.subtle) return '无效密钥';
-  // 这里用同步polyfill（兼容性更好）
-  // 直接用jsSHA1实现
-  // 由于CDN限制，这里用window.CryptoJS（如有）
   if (window.CryptoJS) {
     const u8ToWordArray = (u8arr) => {
       var words = [], i = 0, len = u8arr.length;
@@ -11016,9 +11010,11 @@ createApp({
     let longPressTimer = null;
 
     // 定时刷新动态码与倒计时
-    setInterval(() => {
-      remain.value = 30 - (Math.floor(Date.now() / 1000) % 30);
-    }, 1000);
+    function updateTimer() {
+        remain.value = 30 - (Math.floor(Date.now() / 1000) % 30);
+        requestAnimationFrame(updateTimer);
+      }
+      requestAnimationFrame(updateTimer);
     window.addEventListener('resize', () => {
       isMobile.value = window.innerWidth <= 600;
     });
@@ -12422,17 +12418,7 @@ function copyCode(code, event) {
       
       alert(details);
     }
-    
-    // 在用到jsQR和kjua的地方分别await loadJsQR()和await loadKjua()
-    // 例如：
-    // await loadJsQR();
-    // const code = jsQR(...);
-    // await loadKjua();
-    // const qr = kjua(...);
 
-    // Bootstrap Icons建议用SVG inline方式替换
-
-    // 1. 通用加密/解密函数
     function encryptData(data, password) {
       return CryptoJS.AES.encrypt(data, password).toString();
     }
@@ -12991,15 +12977,12 @@ function copyCode(code, event) {
     </div>
   `,
 }).mount('#app');
-
-} else {
-    // Vue还未加载完成，继续等待
-    setTimeout(waitForVue, 100);
-  }
 }
 
-// 开始等待Vue加载
-waitForVue();
+// 优化Vue初始化 - 直接初始化，因为Vue已内联
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+});
 // 动态加载jsQR
 function loadJsQR() {
   return new Promise((resolve, reject) => {
@@ -13037,44 +13020,12 @@ function loadKjua() {
   });
 }
 
-// 在用到jsQR和kjua的地方分别await loadJsQR()和await loadKjua()
-// 例如：
-// await loadJsQR();
-// const code = jsQR(...);
-// await loadKjua();
-// const qr = kjua(...);
-
-// Bootstrap Icons建议用SVG inline方式替换
-
-
-
 // 全局错误处理
 function handleError(error, context = '操作') {
   console.error(`${context}错误:`, error);
   showToast(`${context}失败: ${error.message || '未知错误'}`, 'danger');
 }
 
-setTimeout(() => {
-  if (typeof Vue === 'undefined') {
-    const vueScript = document.createElement('script');
-    vueScript.src = 'libs/vue.global.prod.js';
-    document.body.appendChild(vueScript);
-  }
-  if (typeof bootstrap === 'undefined') {
-    const bootstrapScript = document.createElement('script');
-    bootstrapScript.src = 'libs/bootstrap.bundle.min.js';
-    document.body.appendChild(bootstrapScript);
-  }
-  if (typeof CryptoJS === 'undefined') {
-    const cryptoScript = document.createElement('script');
-    cryptoScript.src = 'libs/crypto-js.min.js';
-    document.body.appendChild(cryptoScript);
-  }
-}, 2000);
-  </script>
-  <!-- 如有PWA脚本，也可内联 -->
-  <!-- <script> ...pwa.js内容... </script> -->
-  <script>
 // PWA 注册和管理脚本
 class PWAManager {
   constructor() {
